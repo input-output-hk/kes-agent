@@ -40,7 +40,7 @@ mkVersionIdentifier :: ByteString -> VersionIdentifier
 mkVersionIdentifier raw =
   VersionIdentifier $ BS.take versionIdentifierLength $ raw <> BS.replicate versionIdentifierLength 0
 
-instance VersionedProtocol StandardCrypto where
+instance VersionedProtocol (KESProtocol StandardCrypto) where
   versionIdentifier _ =
     mkVersionIdentifier "StandardCrypto:0.1"
 

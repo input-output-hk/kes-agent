@@ -45,7 +45,6 @@ runServiceClient :: forall c
                  => DirectDeserialise (SignKeyKES (KES c))
                  => DirectSerialise (SignKeyKES (KES c))
                  => VersionedProtocol (KESProtocol c)
-                 => FromCBOR (OCert c)
                  => Proxy c
                  -> ServiceClientOptions
                  -> (SignKeyKES (KES c) -> OCert c -> IO ())

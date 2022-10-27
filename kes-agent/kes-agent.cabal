@@ -54,6 +54,8 @@ test-suite kes-agent-tests
                  , bytestring
                  , cardano-binary
                  , cardano-crypto-class
+                 , cardano-protocol-tpraos
+                 , cardano-ledger-core
                  , QuickCheck
                  , socket-unix >=0.2.0.0 && <0.3
                  , tasty

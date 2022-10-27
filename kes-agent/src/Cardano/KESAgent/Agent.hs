@@ -69,7 +69,6 @@ runAgent :: forall c
          => VersionedProtocol (KESProtocol c)
          => DirectSerialise (SignKeyKES (KES c))
          => DirectDeserialise (SignKeyKES (KES c))
-         => FromCBOR (OCert c)
          => Proxy c
          -> AgentOptions
          -> Tracer IO AgentTrace

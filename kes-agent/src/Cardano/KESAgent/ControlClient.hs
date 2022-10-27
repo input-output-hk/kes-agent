@@ -46,7 +46,6 @@ runControlClient1 :: forall c
                   => KESSignAlgorithm IO (KES c)
                   => DirectDeserialise (SignKeyKES (KES c))
                   => DirectSerialise (SignKeyKES (KES c))
-                  => FromCBOR (OCert c)
                   => VersionedProtocol (KESProtocol c)
                   => Proxy c
                   -> ControlClientOptions
