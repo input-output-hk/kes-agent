@@ -125,7 +125,7 @@ data ControlProtocol (m :: * -> *) (k :: *) where
   -- negotiated.
   InitialState :: ControlProtocol m k
 
-  -- | System is idling, waiting for the server to push the next key.
+  -- | System is idling, server awaits next command from control client.
   IdleState :: ControlProtocol m k
 
   -- | Client has requested a new KES key to be generated in the staging area.
