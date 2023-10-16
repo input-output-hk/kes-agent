@@ -70,15 +70,15 @@ instance Protocol VersionHandshakeProtocol where
                                -> Message VersionHandshakeProtocol VersionsOfferedState EndState
           VersionRejectedMessage :: Message VersionHandshakeProtocol VersionsOfferedState EndState
 
-  -- | Server always has agency, except between sending a key and confirming it
+  -- | Server has agency initially.
   data ServerHasAgency st where
     TokInitial :: ServerHasAgency InitialState
 
-  -- | Client only has agency between sending a key and confirming it
+  -- | Client has agency once the server has sent a list of supported versions.
   data ClientHasAgency st where
     TokVersionsOffered :: ClientHasAgency VersionsOfferedState
 
-  -- | Someone, i.e., the server, always has agency
+  -- | When handshake is complete, nobody has agency.
   data NobodyHasAgency st where
     TokEnd :: NobodyHasAgency EndState
 

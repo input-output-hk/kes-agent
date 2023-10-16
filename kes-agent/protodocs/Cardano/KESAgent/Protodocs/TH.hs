@@ -77,18 +77,18 @@ describeProtocol protocol tyArgs = do
     [DataInstD _ _ _ _ clientAgencyCons _] <-
           reifyInstances ''ClientHasAgency [ConT conName]
 
-    let serverAgencyConsMatching =
-          not . null $
-            [ ()
-            | ForallC _ _ (GadtC _ _ (AppT _ (SigT (PromotedT thisState) _))) <- serverAgencyCons
-            , thisState == conName
-            ]
-    let clientAgencyConsMatching =
-          not . null $
-            [ ()
-            | ForallC _ _ (GadtC _ _ (AppT _ (SigT (PromotedT thisState) _))) <- clientAgencyCons
-            , thisState == conName
-            ]
+    let findMatchingCons =
+          any isMatchingCons
+          where
+            isMatchingCons (ForallC _ _ (GadtC _ _ (AppT _ (SigT (PromotedT thisState) _))))
+              = thisState == conName
+            isMatchingCons (GadtC _ _ (AppT _ (PromotedT thisState)))
+              = thisState == conName
+            isMatchingCons x
+              = error . show $ x
+
+    let serverAgencyConsMatching = findMatchingCons serverAgencyCons
+    let clientAgencyConsMatching = findMatchingCons clientAgencyCons
 
     let agencyID
           | serverAgencyConsMatching = ServerAgencyID
