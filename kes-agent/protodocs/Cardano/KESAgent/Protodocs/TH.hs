@@ -72,15 +72,37 @@ describeProtocol protocol tyArgs = do
   pstates <- forM (datatypeCons info) $ \conInfo -> do
     let conName = constructorName conInfo
     stateDescription <- getDescription conName
-    let agencyID = NobodyAgencyID
+    [DataInstD _ _ _ _ serverAgencyCons _] <-
+          reifyInstances ''ServerHasAgency [ConT conName]
+    [DataInstD _ _ _ _ clientAgencyCons _] <-
+          reifyInstances ''ClientHasAgency [ConT conName]
+
+    let serverAgencyConsMatching =
+          not . null $
+            [ ()
+            | ForallC _ _ (GadtC _ _ (AppT _ (SigT (PromotedT thisState) _))) <- serverAgencyCons
+            , thisState == conName
+            ]
+    let clientAgencyConsMatching =
+          not . null $
+            [ ()
+            | ForallC _ _ (GadtC _ _ (AppT _ (SigT (PromotedT thisState) _))) <- clientAgencyCons
+            , thisState == conName
+            ]
+
+    let agencyID
+          | serverAgencyConsMatching = ServerAgencyID
+          | clientAgencyConsMatching = ClientAgencyID
+          | otherwise = NobodyAgencyID
 
     return (conName, stateDescription, agencyID)
 
   let protocolTy = applyTyArgs (ConT protocol) tyArgs
 
-  [DataInstD _ _ ty _ cons _] <- reifyInstances ''Message [protocolTy]
+  [DataInstD _ _ ty _ msgCons _] <- reifyInstances ''Message [protocolTy]
 
-  let messageInfos = map (describeProtocolMessage protocol tyArgs . extractConName) cons
+  let messageInfos = map (describeProtocolMessage protocol tyArgs . extractConName) msgCons
+
 
   [| ProtocolDescription
         $(litE (stringL pname))
