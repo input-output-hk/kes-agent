@@ -111,15 +111,24 @@ deriving instance
 --
 -- Intended use:
 --
--- - The Agent acts as the Client, and the Control Server as a Server
--- - When the Control Server connects, it pushes a key to the Agent
--- - The Agent stores the key locally in memory and pushes it to any connected
---   Nodes.
+-- - The Agent acts as the Server, and the Control Client as a Client
+-- - The Control Client connects, and then sends a command.
+-- - The Agent executes the command and reports back an appropriate result.
 --
--- All pushes are confirmed from the receiving end, to make sure they have gone
--- through. This allows the control client to report success to the user, but it
--- also helps make things more predictable in testing, because it means that
--- sending keys is now synchronous.
+-- All commands are confirmed from the receiving end, to make sure they have
+-- gone through. This allows the control client to report success to the user,
+-- but it also helps make things more predictable in testing, because it means
+-- that sending keys is now synchronous.
+--
+-- The procedure for installing a new key is as follows:
+--
+-- 1. Control Client requests that the Agent generate a fresh KES key by
+-- sending a 'GenStagedKeyMessage'. Agent returns the new KES key's VerKey.
+-- 2. User generates an OpCert for the new KES key.
+-- 3. Control Client sends OpCert.
+-- 4. Agent verifies that the OpCert matches the previously generated KES key,
+-- bundles them together, and sends the bundle out to any connected Service
+-- Clients.
 data ControlProtocol (m :: * -> *) (k :: *) where
   -- | Default state after connecting, but before the protocol version has been
   -- negotiated.
