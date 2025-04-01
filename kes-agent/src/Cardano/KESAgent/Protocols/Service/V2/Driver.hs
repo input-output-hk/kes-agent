@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -15,7 +16,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module Cardano.KESAgent.Protocols.Service.V1.Driver
+module Cardano.KESAgent.Protocols.Service.V2.Driver
 where
 
 import Cardano.KESAgent.KES.Bundle
@@ -23,7 +24,7 @@ import Cardano.KESAgent.KES.Crypto
 import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.BearerUtil
 import Cardano.KESAgent.Protocols.RecvResult
-import Cardano.KESAgent.Protocols.Service.V1.Protocol
+import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionedProtocol
@@ -89,6 +90,10 @@ data KeyMessageTypeID
   | DropKeyMessageID
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
+instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) KeyMessageTypeID where
+  encode p = encodeEnum p (Proxy @Word8)
+  decode p = decodeEnum p (Proxy @Word8)
+
 serviceDriver ::
   forall m f t p pr.
   VersionedProtocol (ServiceProtocol m) =>
@@ -127,9 +132,9 @@ serviceDriver s tracer =
         sendItem s bundle
         traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle))
       (SIdleState, DropKeyMessage) -> do
-        traceWith tracer $ ServiceDriverDroppingKey
+        traceWith tracer $ ServiceDriverRequestingKeyDrop
         sendItem s DropKeyMessageID
-        traceWith tracer $ ServiceDriverDroppedKey
+        traceWith tracer $ ServiceDriverRequestedKeyDrop
       (SIdleState, ServerDisconnectMessage) -> do
         return ()
       (_, ProtocolErrorMessage) -> do
@@ -165,7 +170,7 @@ serviceDriver s tracer =
       SIdleState -> do
         result <- runReadResultT $ do
           what <- receiveItem s
-          case what in
+          case what of
             KeyMessageID -> do
               lift $ traceWith tracer ServiceDriverReceivingKey
               bundle <- receiveItem s
@@ -173,7 +178,6 @@ serviceDriver s tracer =
               return (SomeMessage (KeyMessage bundle), ())
             DropKeyMessageID -> do
               lift $ traceWith tracer ServiceDriverDroppingKey
-              lift $ traceWith tracer ServiceDriverDroppedKey
               return (SomeMessage DropKeyMessage, ())
         case result of
           ReadOK msg ->

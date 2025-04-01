@@ -92,6 +92,10 @@ tests =
         , testCase "multiple nodes" kesAgentControlInstallMultiNodes
         ]
     , testGroup
+        "kes-agent-control drop-key"
+        [ testCase "valid" kesAgentControlDropInstalled
+        ]
+    , testGroup
         "inter-agent"
         [ testCase "key propagated to other agent" kesAgentPropagate
         , testCase "self-healing 1 (agent 2 goes down)" kesAgentSelfHeal1
@@ -512,6 +516,69 @@ kesAgentControlInstallDroppedKey =
           ["Error: No KES key found"]
 
     assertNoMatchingOutputLines 4 ["->", "ServiceClientBlockForging"] serviceOutLines
+
+kesAgentControlDropInstalled :: Assertion
+kesAgentControlDropInstalled =
+  withSystemTempDirectory "KesAgentTest" $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+        kesKeyFile = tmpdir </> "kes.vkey"
+        opcertFile = tmpdir </> "opcert.cert"
+    coldSignKeyFile <- getDataFileName "fixtures/cold.skey"
+    coldVerKeyFile <- getDataFileName "fixtures/cold.vkey"
+
+    let makeCert = do
+          ColdSignKey coldSK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdSignKey (DSIGN StandardCrypto)) coldSignKeyFile
+          ColdVerKey coldVK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdVerKey (DSIGN StandardCrypto)) coldVerKeyFile
+          KESVerKey kesVK <-
+            either error return =<< decodeTextEnvelopeFile @(KESVerKey (KES StandardCrypto)) kesKeyFile
+          kesPeriod <- getCurrentKESPeriod defEvolutionConfig
+          let ocert :: OCert StandardCrypto = makeOCert kesVK 0 kesPeriod coldSK
+          encodeTextEnvelopeFile opcertFile (OpCert ocert coldVK)
+          return ()
+
+    (agentOutLines, serviceOutLines, ()) <-
+      withAgentAndService controlAddr serviceAddr [] coldVerKeyFile [] $ do
+        controlClientCheck
+          "Key generated"
+          [ "gen-staged-key"
+          , "--kes-verification-key-file"
+          , kesKeyFile
+          , "--control-address"
+          , controlAddr
+          ]
+          ExitSuccess
+          [ "Asking agent to generate a key..."
+          , "KES SignKey generated."
+          , "KES VerKey written to " <> kesKeyFile
+          ]
+        makeCert
+        controlClientCheck
+          "Key installed"
+          [ "install-key"
+          , "--opcert-file"
+          , opcertFile
+          , "--control-address"
+          , controlAddr
+          ]
+          ExitSuccess
+          ["KES key installed."]
+        -- Allow some time for service client to actually receive the key
+        threadDelay 10000
+        controlClientCheck
+          "Key dropped"
+          [ "drop-key"
+          , "--control-address"
+          , controlAddr
+          ]
+          ExitSuccess
+          ["KES key dropped."]
+    assertMatchingOutputLinesWith
+      ("SERVICE OUTPUT CHECK\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      4
+      ["->", "ServiceClientBlockForging", "0"]
+      serviceOutLines
 
 kesAgentControlInstallMultiNodes :: Assertion
 kesAgentControlInstallMultiNodes =

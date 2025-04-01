@@ -5,14 +5,14 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.KESAgent.Protocols.Service.V1.Peers
+module Cardano.KESAgent.Protocols.Service.V2.Peers
 where
 
 import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
 import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.RecvResult
-import Cardano.KESAgent.Protocols.Service.V1.Protocol
+import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Util.RefCounting
 
@@ -34,7 +34,7 @@ serviceReceiver ::
   (Bundle m StandardCrypto -> m RecvResult) ->
   m RecvResult ->
   Client (ServiceProtocol m) NonPipelined InitialState m ()
-serviceReceiver receiveBundle =
+serviceReceiver receiveBundle dropBundle =
   Client.Await $ \case
     VersionMessage -> go
     AbortMessage -> Client.Done ()
@@ -62,15 +62,15 @@ servicePusher ::
   MonadAsync m =>
   MonadTimer m =>
   m (Bundle m StandardCrypto) ->
-  m (Bundle m StandardCrypto) ->
+  m (Maybe (Bundle m StandardCrypto)) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m) NonPipelined InitialState m ()
 servicePusher currentKey nextKey handleResult =
   Server.Yield VersionMessage $
     Server.Effect $ do
-      bundleMay <- currentKey
+      bundle <- currentKey
       return $
-        Server.Yield (maybe DropKeyMessage KeyMessage bundleMay) $
+        Server.Yield (KeyMessage bundle) $
           Server.Await $
             \(RecvResultMessage result) -> goR result
   where

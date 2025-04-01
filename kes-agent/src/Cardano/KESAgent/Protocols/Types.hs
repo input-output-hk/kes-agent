@@ -45,7 +45,10 @@ data ControlDriverTrace
   | ControlDriverConfirmedKey
   | ControlDriverDecliningKey
   | ControlDriverDeclinedKey
+  | ControlDriverConfirmingKeyDrop
+  | ControlDriverConfirmedKeyDrop
   | ControlDriverNoPublicKeyToReturn
+  | ControlDriverNoPublicKeyToDrop
   | ControlDriverReturningPublicKey
   | ControlDriverConnectionClosed
   | ControlDriverCRefEvent CRefEvent
@@ -64,6 +67,7 @@ data Command
   | DropStagedKeyCmd
   | InstallKeyCmd
   | RequestInfoCmd
+  | DropKeyCmd
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 deriving via
@@ -101,6 +105,9 @@ data ServiceDriverTrace
   | ServiceDriverConfirmedKey
   | ServiceDriverDecliningKey !RecvResult
   | ServiceDriverDeclinedKey
+  | ServiceDriverRequestingKeyDrop
+  | ServiceDriverRequestedKeyDrop
+  | ServiceDriverDroppingKey
   | ServiceDriverConnectionClosed
   | ServiceDriverCRefEvent !CRefEvent
   | ServiceDriverProtocolError !String

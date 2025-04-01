@@ -18,12 +18,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
-module Cardano.KESAgent.Protocols.Control.V1.Driver
+module Cardano.KESAgent.Protocols.Control.V2.Driver
 where
 
 import Cardano.KESAgent.KES.Crypto
 import Cardano.KESAgent.KES.OCert
-import Cardano.KESAgent.Protocols.Control.V1.Protocol
+import Cardano.KESAgent.Protocols.Control.V2.Protocol
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
@@ -183,6 +183,8 @@ controlDriver s tracer =
         sendItem s QueryStagedKeyCmd
       (SIdleState, DropStagedKeyMessage) -> do
         sendItem s DropStagedKeyCmd
+      (SIdleState, DropKeyMessage) -> do
+        sendItem s DropKeyCmd
       (SIdleState, RequestInfoMessage) -> do
         sendItem s RequestInfoCmd
       (SIdleState, InstallKeyMessage oc) -> do
@@ -197,7 +199,7 @@ controlDriver s tracer =
           Nothing -> traceWith tracer ControlDriverNoPublicKeyToReturn
           Just _ -> traceWith tracer ControlDriverReturningPublicKey
         sendItem s vkeyMay
-      (SWaitForConfirmationState, InstallResultMessage reason) -> do
+      (SWaitForKeyConfirmationState, InstallResultMessage reason) -> do
         if reason == RecvOK
           then
             traceWith tracer ControlDriverConfirmingKey
@@ -238,7 +240,7 @@ controlDriver s tracer =
             DropStagedKeyCmd ->
               return (SomeMessage DropStagedKeyMessage, ())
             DropKeyCmd ->
-              return (SomeMessage ProtocolErrorMessage, ())
+              return (SomeMessage DropKeyMessage, ())
             InstallKeyCmd -> do
               oc <- receiveItem s
               return (SomeMessage (InstallKeyMessage oc), ())
@@ -269,7 +271,7 @@ controlDriver s tracer =
           err -> do
             traceWith tracer $ readErrorToControlDriverTrace err
             return (SomeMessage ProtocolErrorMessage, ())
-      SWaitForConfirmationState -> do
+      SWaitForKeyConfirmationState -> do
         result <- runReadResultT $ receiveItem s
         case result of
           ReadOK reason ->
@@ -330,22 +332,22 @@ instance
       (info codec (Proxy @(Maybe (VerKeyKES (KES StandardCrypto)))))
 instance
   HasInfo (DirectCodec m) (VerKeyKES (KES StandardCrypto)) =>
-  HasInfo (DirectCodec m) (Message (ControlProtocol m) IdleState WaitForConfirmationState)
+  HasInfo (DirectCodec m) (Message (ControlProtocol m) IdleState WaitForKeyConfirmationState)
   where
   info codec _ =
     aliasField
       ( "Message<"
           ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ cpVersionIdentifier)
-          ++ ",IdleState,WaitForConfirmationState"
+          ++ ",IdleState,WaitForKeyConfirmationState"
           ++ ">"
       )
       (info codec (Proxy @(OCert StandardCrypto)))
-instance HasInfo (DirectCodec m) (Message (ControlProtocol m) WaitForConfirmationState IdleState) where
+instance HasInfo (DirectCodec m) (Message (ControlProtocol m) WaitForKeyConfirmationState IdleState) where
   info codec _ =
     aliasField
       ( "Message<"
           ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ cpVersionIdentifier)
-          ++ ",WaitForConfirmationState,IdleState"
+          ++ ",WaitForKeyConfirmationState,IdleState"
           ++ ">"
       )
       (info codec (Proxy @RecvResult))

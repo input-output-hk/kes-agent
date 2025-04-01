@@ -336,6 +336,7 @@ data NodeScript m c
   = NodeScript
   { runNodeScript :: NodeHooks m c -> m ()
   , keyReceived :: NodeHooks m c -> Bundle m c -> m RecvResult
+  , keyDropped :: NodeHooks m c -> m RecvResult
   }
 
 newtype PrettyBS
@@ -552,6 +553,8 @@ runTestNetwork
                     ( \bundle -> do
                         keyReceived script hooks bundle
                     )
+                    ( keyDropped script hooks
+                    )
                     tracer
                     `catch` (\(e :: AsyncCancelled) -> return ())
                     `catch` (\(e :: SomeException) -> traceWith tracer $ ServiceClientAbnormalTermination ("NODE: " ++ show e))
@@ -756,6 +759,9 @@ testOneKeyThroughChain
                 nodeReportProperty
                   hooks
                   ((expectedPretty, expectedPeriod) === (resultPretty, resultPeriod))
+                nodeDone hooks
+                return RecvOK
+            , keyDropped = \hooks -> do
                 nodeDone hooks
                 return RecvOK
             , runNodeScript = const $ return ()

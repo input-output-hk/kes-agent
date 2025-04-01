@@ -245,6 +245,8 @@ controlDriver s tracer =
               return (SomeMessage QueryStagedKeyMessage, ())
             DropStagedKeyCmd ->
               return (SomeMessage DropStagedKeyMessage, ())
+            DropKeyCmd ->
+              return (SomeMessage ProtocolErrorMessage, ())
             InstallKeyCmd -> do
               oc <- receiveItem s
               return (SomeMessage (InstallKeyMessage oc), ())

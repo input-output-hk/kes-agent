@@ -97,6 +97,7 @@ serviceTracePrio ServiceClientSocketClosed {} = Notice
 serviceTracePrio ServiceClientConnected {} = Notice
 serviceTracePrio ServiceClientAttemptReconnect {} = Info
 serviceTracePrio ServiceClientReceivedKey {} = Notice
+serviceTracePrio ServiceClientDroppedKey {} = Notice
 serviceTracePrio ServiceClientAbnormalTermination {} = Error
 serviceTracePrio ServiceClientOpCertNumberCheck {} = Debug
 
@@ -130,6 +131,13 @@ handleKey setState (Bundle skpVar ocert) = withCRefValue skpVar $ \skp -> do
   let period = periodKES skp
   let certN = ocertN ocert
   setState $ ServiceClientBlockForging certN period (take 8 (hexShowBS skSer) ++ "...")
+  return RecvOK
+
+dropKey ::
+  (ServiceClientState -> IO ()) ->
+  IO RecvResult
+dropKey setState = do
+  setState $ ServiceClientWaitingForCredentials
   return RecvOK
 
 hexShowBS :: ByteString -> String
@@ -170,6 +178,7 @@ main = do
         makeSocketRawBearer
         serviceClientOptions
         (handleKey setState)
+        (dropKey setState)
         (contramap formatServiceTrace tracer)
         `catch` ( \(e :: AsyncCancelled) ->
                     return ()

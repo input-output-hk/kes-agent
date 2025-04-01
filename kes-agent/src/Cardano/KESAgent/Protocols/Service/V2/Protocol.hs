@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.KESAgent.Protocols.Service.V1.Protocol
+module Cardano.KESAgent.Protocols.Service.V2.Protocol
 where
 
 import Cardano.KESAgent.KES.Bundle

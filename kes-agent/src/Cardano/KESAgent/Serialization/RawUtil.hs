@@ -450,6 +450,7 @@ encodeRecvResult RecvOK = 0
 encodeRecvResult RecvErrorKeyOutdated = 1
 encodeRecvResult RecvErrorInvalidOpCert = 2
 encodeRecvResult RecvErrorNoKey = 3
+encodeRecvResult RecvErrorUnsupportedOperation = 4
 encodeRecvResult RecvErrorUnknown = 0xFFFF
 
 decodeRecvResult :: Word32 -> RecvResult
@@ -457,4 +458,5 @@ decodeRecvResult 0 = RecvOK
 decodeRecvResult 1 = RecvErrorKeyOutdated
 decodeRecvResult 2 = RecvErrorInvalidOpCert
 decodeRecvResult 3 = RecvErrorNoKey
+decodeRecvResult 4 = RecvErrorUnsupportedOperation
 decodeRecvResult _ = RecvErrorUnknown

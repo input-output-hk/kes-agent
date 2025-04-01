@@ -57,7 +57,7 @@ servicePusher ::
   MonadAsync m =>
   MonadTimer m =>
   m (Bundle m StandardCrypto) ->
-  m (Bundle m StandardCrypto) ->
+  m (Maybe (Bundle m StandardCrypto)) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m) NonPipelined InitialState m ()
 servicePusher currentKey nextKey handleResult =
@@ -76,8 +76,13 @@ servicePusher currentKey nextKey handleResult =
 
     go :: m (Server (ServiceProtocol m) NonPipelined IdleState m ())
     go = do
-      bundle <- nextKey
-      return $
-        Server.Yield (KeyMessage bundle) $
-          Server.Await $
-            \(RecvResultMessage result) -> goR result
+      bundleMay <- nextKey
+      case bundleMay of
+        Nothing ->
+            return $
+              goR RecvErrorUnsupportedOperation
+        Just bundle ->
+            return $
+              Server.Yield (KeyMessage bundle) $
+                Server.Await $
+                  \(RecvResultMessage result) -> goR result

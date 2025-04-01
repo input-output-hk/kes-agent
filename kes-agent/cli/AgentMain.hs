@@ -412,6 +412,7 @@ agentTracePrio (AgentBootstrapTrace ServiceClientSocketClosed {}) = Notice
 agentTracePrio (AgentBootstrapTrace ServiceClientConnected {}) = Notice
 agentTracePrio (AgentBootstrapTrace ServiceClientAttemptReconnect {}) = Info
 agentTracePrio (AgentBootstrapTrace ServiceClientReceivedKey {}) = Notice
+agentTracePrio (AgentBootstrapTrace ServiceClientDroppedKey {}) = Notice
 agentTracePrio (AgentBootstrapTrace ServiceClientAbnormalTermination {}) = Error
 agentTracePrio (AgentBootstrapTrace ServiceClientOpCertNumberCheck {}) = Debug
 agentTracePrio AgentReplacingPreviousKey {} = Notice

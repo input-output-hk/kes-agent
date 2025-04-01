@@ -143,6 +143,30 @@ qkoFromEnv = do
       { qkoCommon = common
       }
 
+newtype DropStagedKeyOptions
+  = DropStagedKeyOptions
+  { dskoCommon :: CommonOptions
+  }
+  deriving (Show, Eq)
+
+instance Semigroup DropStagedKeyOptions where
+  DropStagedKeyOptions c1 <> DropStagedKeyOptions c2 =
+    DropStagedKeyOptions (c1 <> c2)
+
+defDropStagedKeyOptions :: DropStagedKeyOptions =
+  DropStagedKeyOptions
+    { dskoCommon = defCommonOptions
+    }
+
+dskoFromEnv :: IO DropStagedKeyOptions
+dskoFromEnv = do
+  common <- optFromEnv
+  return
+    defDropStagedKeyOptions
+      { dskoCommon = common
+      }
+
+
 newtype DropKeyOptions
   = DropKeyOptions
   { dkoCommon :: CommonOptions
@@ -238,6 +262,10 @@ pQueryKeyOptions =
     <$> pCommonOptions
     <*> pVerKeyFile
 
+pDropStagedKeyOptions =
+  DropStagedKeyOptions
+    <$> pCommonOptions
+
 pDropKeyOptions =
   DropKeyOptions
     <$> pCommonOptions
@@ -268,17 +296,19 @@ pOpCertFile =
 data ProgramOptions
   = RunGenKey GenKeyOptions
   | RunQueryKey QueryKeyOptions
-  | RunDropKey DropKeyOptions
+  | RunDropStagedKey DropStagedKeyOptions
   | RunInstallKey InstallKeyOptions
+  | RunDropKey DropKeyOptions
   | RunGetInfo CommonOptions -- for now
   deriving (Show, Eq)
 
 pProgramOptions =
   subparser
     ( command "gen-staged-key" (info (RunGenKey <$> pGenKeyOptions) idm)
-        <> command "drop-staged-key" (info (RunDropKey <$> pDropKeyOptions) idm)
+        <> command "drop-staged-key" (info (RunDropStagedKey <$> pDropStagedKeyOptions) idm)
         <> command "export-staged-vkey" (info (RunQueryKey <$> pQueryKeyOptions) idm)
         <> command "install-key" (info (RunInstallKey <$> pInstallKeyOptions) idm)
+        <> command "drop-key" (info (RunDropKey <$> pDropKeyOptions) idm)
         <> command "info" (info (RunGetInfo <$> pCommonOptions) idm)
     )
 
@@ -301,6 +331,7 @@ formatReason RecvOK = "no error"
 formatReason RecvErrorInvalidOpCert = "OpCert validation failed"
 formatReason RecvErrorKeyOutdated = "KES key outdated"
 formatReason RecvErrorNoKey = "No KES key found"
+formatReason RecvErrorUnsupportedOperation = "Operation not supported"
 formatReason RecvErrorUnknown = "unknown error"
 
 mkControlClientOptions :: CommonOptions -> IOManager -> IO (ControlClientOptions IO Socket SockAddr)
@@ -384,15 +415,15 @@ runQueryKey qko' = withIOManager $ \ioManager -> do
           encodeTextEnvelopeFile verKeyFilename (KESVerKey vkKES)
           putStrLn $ "KES VerKey written to " ++ verKeyFilename
 
-runDropKey :: DropKeyOptions -> IO ()
-runDropKey dko' = withIOManager $ \ioManager -> do
-  dkoEnv <- dkoFromEnv
-  let dko = dko' <> dkoEnv <> defDropKeyOptions
+runDropStagedKey :: DropStagedKeyOptions -> IO ()
+runDropStagedKey dsko' = withIOManager $ \ioManager -> do
+  dskoEnv <- dskoFromEnv
+  let dsko = dsko' <> dskoEnv <> defDropStagedKeyOptions
   vkKESMay <-
     runControlClientCommand
-      (dkoCommon dko)
+      (dskoCommon dsko)
       ioManager
-      controlDropKey
+      controlDropStagedKey
   case vkKESMay of
     Nothing -> do
       putStrLn "Staged key dropped."
@@ -423,6 +454,23 @@ runInstallKey iko' = withIOManager $ \ioManager -> do
         else do
           putStrLn $ "Error: " ++ formatReason result
           exitWith $ ExitFailure (fromEnum result)
+
+runDropKey :: DropKeyOptions -> IO ()
+runDropKey dko' = withIOManager $ \ioManager -> do
+  dkoEnv <- dkoFromEnv
+  let dko = dko' <> dkoEnv <> defDropKeyOptions
+  vkKESMay <-
+    runControlClientCommand
+      (dkoCommon dko)
+      ioManager
+      controlDropKey
+  case vkKESMay of
+    Nothing -> do
+      putStrLn "KES key dropped."
+    Just vkKES -> do
+      putStrLn "KES key not dropped:"
+      BS.putStr $ encodeTextEnvelope (KESVerKey vkKES)
+      putStrLn ""
 
 runGetInfo :: CommonOptions -> IO ()
 runGetInfo opt' = withIOManager $ \ioManager -> do
@@ -462,6 +510,7 @@ main = do
   case programOptions of
     RunGenKey opts' -> runGenKey opts'
     RunQueryKey opts' -> runQueryKey opts'
+    RunDropStagedKey opts' -> runDropStagedKey opts'
     RunDropKey opts' -> runDropKey opts'
     RunInstallKey opts' -> runInstallKey opts'
     RunGetInfo opts' -> runGetInfo opts'

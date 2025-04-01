@@ -20,6 +20,9 @@ import qualified Cardano.KESAgent.Protocols.Service.V0.Protocol as SP0
 import qualified Cardano.KESAgent.Protocols.Service.V1.Driver as SP1
 import qualified Cardano.KESAgent.Protocols.Service.V1.Peers as SP1
 import qualified Cardano.KESAgent.Protocols.Service.V1.Protocol as SP1
+import qualified Cardano.KESAgent.Protocols.Service.V2.Driver as SP2
+import qualified Cardano.KESAgent.Protocols.Service.V2.Peers as SP2
+import qualified Cardano.KESAgent.Protocols.Service.V2.Protocol as SP2
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionHandshake.Driver
@@ -85,6 +88,7 @@ data ServiceClientTrace
   | ServiceClientConnected !String
   | ServiceClientAttemptReconnect !Int !Int !String !String
   | ServiceClientReceivedKey
+  | ServiceClientDroppedKey
   | ServiceClientOpCertNumberCheck !Word64 !Word64
   | ServiceClientAbnormalTermination !String
   deriving (Show)
@@ -129,6 +133,7 @@ class ServiceClientDrivers c where
       , RawBearer m ->
         Tracer m ServiceClientTrace ->
         (Bundle m c -> m RecvResult) ->
+        (m RecvResult) ->
         m ()
       )
     ]
@@ -140,11 +145,12 @@ mkServiceClientDriverSP0 ::
   , RawBearer m ->
     Tracer m ServiceClientTrace ->
     (Bundle m c -> m RecvResult) ->
+    (m RecvResult) ->
     m ()
   )
 mkServiceClientDriverSP0 =
   ( versionIdentifier (Proxy @(SP0.ServiceProtocol _ StandardCrypto))
-  , \bearer tracer handleKey ->
+  , \bearer tracer handleKey _dropKey ->
       void $
         runPeerWithDriver
           (SP0.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
@@ -158,20 +164,45 @@ mkServiceClientDriverSP1 ::
   , RawBearer m ->
     Tracer m ServiceClientTrace ->
     (Bundle m StandardCrypto -> m RecvResult) ->
+    (m RecvResult) ->
     m ()
   )
 mkServiceClientDriverSP1 =
   ( versionIdentifier (Proxy @(SP1.ServiceProtocol _))
-  , \bearer tracer handleKey ->
+  , \bearer tracer handleKey _dropKey ->
       void $
         runPeerWithDriver
           (SP1.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
           (SP1.serviceReceiver $ \bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey)
   )
 
+mkServiceClientDriverSP2 ::
+  forall m.
+  ServiceClientContext m StandardCrypto =>
+  ( VersionIdentifier
+  , RawBearer m ->
+    Tracer m ServiceClientTrace ->
+    (Bundle m StandardCrypto -> m RecvResult) ->
+    (m RecvResult) ->
+    m ()
+  )
+mkServiceClientDriverSP2 =
+  ( versionIdentifier (Proxy @(SP2.ServiceProtocol _))
+  , \bearer tracer handleKey dropKey ->
+      void $
+        runPeerWithDriver
+          (SP2.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
+          (SP2.serviceReceiver
+            (\bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey)
+            (dropKey <* traceWith tracer ServiceClientDroppedKey))
+  )
+
 instance ServiceClientDrivers StandardCrypto where
   availableServiceClientDrivers =
-    [mkServiceClientDriverSP1, mkServiceClientDriverSP0]
+    [ mkServiceClientDriverSP2
+    , mkServiceClientDriverSP1
+    , mkServiceClientDriverSP0
+    ]
 
 instance ServiceClientDrivers MockCrypto where
   availableServiceClientDrivers =
@@ -193,11 +224,12 @@ runServiceClientForever ::
   MakeRawBearer m fd ->
   ServiceClientOptions m fd addr ->
   (Bundle m c -> m RecvResult) ->
+  m RecvResult ->
   Tracer m ServiceClientTrace ->
   m ()
-runServiceClientForever proxy mrb options handleKey tracer =
+runServiceClientForever proxy mrb options handleKey dropKey tracer =
   forever $ do
-    runServiceClient proxy mrb options handleKey tracer `catch` handle
+    runServiceClient proxy mrb options handleKey dropKey tracer `catch` handle
     threadDelay 1000000
   where
     handle :: SomeException -> m ()
@@ -215,9 +247,10 @@ runServiceClient ::
   MakeRawBearer m fd ->
   ServiceClientOptions m fd addr ->
   (Bundle m c -> m RecvResult) ->
+  m RecvResult ->
   Tracer m ServiceClientTrace ->
   m ()
-runServiceClient proxy mrb options handleKey tracer = do
+runServiceClient proxy mrb options handleKey dropKey tracer = do
   poisonWindows
   let s = serviceClientSnocket options
   latestOCNumVar <- newMVar Nothing
@@ -263,5 +296,5 @@ runServiceClient proxy mrb options handleKey tracer = do
             Nothing ->
               traceWith tracer ServiceClientVersionHandshakeFailed
             Just run ->
-              run bearer tracer handleKey'
+              run bearer tracer handleKey' dropKey
       )

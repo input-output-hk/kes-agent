@@ -14,7 +14,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.KESAgent.Protocols.Control.V1.Protocol
+module Cardano.KESAgent.Protocols.Control.V2.Protocol
 where
 
 import Cardano.KESAgent.KES.Crypto
@@ -113,13 +113,14 @@ data ControlProtocol (m :: Type -> Type) where
   InitialState :: ControlProtocol m
   -- | System is idling, waiting for the server to push the next key.
   IdleState :: ControlProtocol m
-  -- | Client has requested a new KES key to be generated in the staging area.
+  -- | Client has made a request that will result in a public key being
+  -- returned.
   WaitForPublicKeyState :: ControlProtocol m
   -- | Client has requested agent information
   WaitForInfoState :: ControlProtocol m
   -- | An OpCert has been pushed, client must now confirm that it has been
   -- received, and that it matches the staged KES key.
-  WaitForConfirmationState :: ControlProtocol m
+  WaitForKeyConfirmationState :: ControlProtocol m
   -- | The server has closed the connection, thus signalling the end of the
   -- session.
   EndState :: ControlProtocol m
@@ -169,6 +170,14 @@ data ControlProtocol (m :: Type -> Type) where
   InstallResultMessage
   ( Description
       [ "Returned by the KES agent in response to an @install-key@ command."
+      ]
+  )
+  #-}
+{-# ANN
+  DropKeyMessage
+  ( Description
+      [ "Ask the KES agent to drop the currently active key."
+      , "Corresponds to the @drop-key@ command."
       ]
   )
   #-}
@@ -223,10 +232,12 @@ instance Protocol (ControlProtocol m) where
       Message (ControlProtocol m) WaitForPublicKeyState IdleState
     InstallKeyMessage ::
       OCert StandardCrypto ->
-      Message (ControlProtocol m) IdleState WaitForConfirmationState
+      Message (ControlProtocol m) IdleState WaitForKeyConfirmationState
     InstallResultMessage ::
       RecvResult ->
-      Message (ControlProtocol m) WaitForConfirmationState IdleState
+      Message (ControlProtocol m) WaitForKeyConfirmationState IdleState
+    DropKeyMessage ::
+      Message (ControlProtocol m) IdleState WaitForPublicKeyState
     RequestInfoMessage :: Message (ControlProtocol m) IdleState WaitForInfoState
     InfoMessage ::
       AgentInfo ->
@@ -238,7 +249,7 @@ instance Protocol (ControlProtocol m) where
   type StateAgency InitialState = ServerAgency
   type StateAgency IdleState = ServerAgency
 
-  type StateAgency WaitForConfirmationState = ClientAgency
+  type StateAgency WaitForKeyConfirmationState = ClientAgency
   type StateAgency WaitForPublicKeyState = ClientAgency
   type StateAgency WaitForInfoState = ClientAgency
 
@@ -249,14 +260,14 @@ instance Protocol (ControlProtocol m) where
 data SControlProtocol (st :: ControlProtocol m) where
   SInitialState :: SControlProtocol InitialState
   SIdleState :: SControlProtocol IdleState
-  SWaitForConfirmationState :: SControlProtocol WaitForConfirmationState
+  SWaitForKeyConfirmationState :: SControlProtocol WaitForKeyConfirmationState
   SWaitForPublicKeyState :: SControlProtocol WaitForPublicKeyState
   SWaitForInfoState :: SControlProtocol WaitForInfoState
   SEndState :: SControlProtocol EndState
 
 instance StateTokenI InitialState where stateToken = SInitialState
 instance StateTokenI IdleState where stateToken = SIdleState
-instance StateTokenI WaitForConfirmationState where stateToken = SWaitForConfirmationState
+instance StateTokenI WaitForKeyConfirmationState where stateToken = SWaitForKeyConfirmationState
 instance StateTokenI WaitForPublicKeyState where stateToken = SWaitForPublicKeyState
 instance StateTokenI WaitForInfoState where stateToken = SWaitForInfoState
 instance StateTokenI EndState where stateToken = SEndState
@@ -265,4 +276,4 @@ instance VersionedProtocol (ControlProtocol m) where
   versionIdentifier _ = cpVersionIdentifier
 
 cpVersionIdentifier :: VersionIdentifier
-cpVersionIdentifier = mkVersionIdentifier "Control:2.0"
+cpVersionIdentifier = mkVersionIdentifier "Control:1.0"

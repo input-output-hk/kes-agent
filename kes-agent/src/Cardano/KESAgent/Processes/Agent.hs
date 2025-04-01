@@ -62,6 +62,9 @@ import qualified Cardano.KESAgent.Protocols.Control.V0.Protocol as CP0
 import qualified Cardano.KESAgent.Protocols.Control.V1.Driver as CP1
 import qualified Cardano.KESAgent.Protocols.Control.V1.Peers as CP1
 import qualified Cardano.KESAgent.Protocols.Control.V1.Protocol as CP1
+import qualified Cardano.KESAgent.Protocols.Control.V2.Driver as CP2
+import qualified Cardano.KESAgent.Protocols.Control.V2.Peers as CP2
+import qualified Cardano.KESAgent.Protocols.Control.V2.Protocol as CP2
 import Cardano.KESAgent.Protocols.RecvResult (RecvResult (..))
 import qualified Cardano.KESAgent.Protocols.Service.V0.Driver as SP0
 import qualified Cardano.KESAgent.Protocols.Service.V0.Peers as SP0
@@ -69,6 +72,9 @@ import qualified Cardano.KESAgent.Protocols.Service.V0.Protocol as SP0
 import qualified Cardano.KESAgent.Protocols.Service.V1.Driver as SP1
 import qualified Cardano.KESAgent.Protocols.Service.V1.Peers as SP1
 import qualified Cardano.KESAgent.Protocols.Service.V1.Protocol as SP1
+import qualified Cardano.KESAgent.Protocols.Service.V2.Driver as SP2
+import qualified Cardano.KESAgent.Protocols.Service.V2.Peers as SP2
+import qualified Cardano.KESAgent.Protocols.Service.V2.Protocol as SP2
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionHandshake.Driver (
@@ -463,6 +469,17 @@ dropKey ::
   Agent c m fd addr -> m (Maybe (VerKeyKES (KES c)))
 dropKey agent =
   do
+    bundleMay <- atomically $ takeTMVar (agentCurrentKeyVar agent)
+    maybe (return ()) (releaseCRef . bundleSKP) bundleMay
+    return Nothing
+    `finally` do
+      atomically $ putTMVar (agentCurrentKeyVar agent) Nothing
+
+dropStagedKey ::
+  AgentContext m c =>
+  Agent c m fd addr -> m (Maybe (VerKeyKES (KES c)))
+dropStagedKey agent =
+  do
     keyMay <- atomically $ takeTMVar (agentStagedKeyVar agent)
     maybe (return ()) releaseCRef keyMay
     return Nothing
@@ -569,6 +586,41 @@ convertConnectionStatusCP1 :: ConnectionStatus -> CP1.ConnectionStatus
 convertConnectionStatusCP1 ConnectionUp = CP1.ConnectionUp
 convertConnectionStatusCP1 ConnectionConnecting = CP1.ConnectionConnecting
 convertConnectionStatusCP1 ConnectionDown = CP1.ConnectionDown
+
+instance FromAgentInfo StandardCrypto CP2.AgentInfo where
+  fromAgentInfo info =
+    CP2.AgentInfo
+      { CP2.agentInfoCurrentBundle = convertBundleInfoCP2 <$> agentInfoCurrentBundle info
+      , CP2.agentInfoStagedKey = convertKeyInfoCP2 <$> agentInfoStagedKey info
+      , CP2.agentInfoCurrentTime = agentInfoCurrentTime info
+      , CP2.agentInfoCurrentKESPeriod = agentInfoCurrentKESPeriod info
+      , CP2.agentInfoBootstrapConnections = convertBootstrapInfoCP2 <$> agentInfoBootstrapConnections info
+      }
+
+convertBundleInfoCP2 :: BundleInfo StandardCrypto -> CP2.BundleInfo
+convertBundleInfoCP2 info =
+  CP2.BundleInfo
+    { CP2.bundleInfoEvolution = bundleInfoEvolution info
+    , CP2.bundleInfoStartKESPeriod = bundleInfoStartKESPeriod info
+    , CP2.bundleInfoOCertN = bundleInfoOCertN info
+    , CP2.bundleInfoVK = bundleInfoVK info
+    , CP2.bundleInfoSigma = bundleInfoSigma info
+    }
+
+convertKeyInfoCP2 :: KeyInfo StandardCrypto -> CP2.KeyInfo
+convertKeyInfoCP2 = coerce
+
+convertBootstrapInfoCP2 :: BootstrapInfo -> CP2.BootstrapInfo
+convertBootstrapInfoCP2 info =
+  CP2.BootstrapInfo
+    { CP2.bootstrapInfoAddress = bootstrapInfoAddress info
+    , CP2.bootstrapInfoStatus = convertConnectionStatusCP2 $ bootstrapInfoStatus info
+    }
+
+convertConnectionStatusCP2 :: ConnectionStatus -> CP2.ConnectionStatus
+convertConnectionStatusCP2 ConnectionUp = CP2.ConnectionUp
+convertConnectionStatusCP2 ConnectionConnecting = CP2.ConnectionConnecting
+convertConnectionStatusCP2 ConnectionDown = CP2.ConnectionDown
 
 getInfo ::
   AgentContext m c =>
@@ -802,11 +854,10 @@ mkServiceDriverSP0 =
   ServiceDriver
     ( versionIdentifier (Proxy @(SP0.ServiceProtocol _ c)) )
     ( \bearer tracer currentKey nextKey reportPushResult -> do
-        let nextKey' = nextKey >>= maybe (error "DropKey command not supported")return
         void $
           runPeerWithDriver
             (SP0.serviceDriver bearer tracer)
-            (SP0.servicePusher currentKey nextKey' reportPushResult)
+            (SP0.servicePusher currentKey nextKey reportPushResult)
     )
 
 mkServiceDriverSP1 ::
@@ -816,16 +867,29 @@ mkServiceDriverSP1 =
   ServiceDriver
     ( versionIdentifier (Proxy @(SP1.ServiceProtocol _)) )
     ( \bearer tracer currentKey nextKey reportPushResult -> do
-        let nextKey' = nextKey >>= maybe (error "DropKey command not supported")return
         void $
           runPeerWithDriver
             (SP1.serviceDriver bearer tracer)
-            (SP1.servicePusher currentKey nextKey' reportPushResult)
+            (SP1.servicePusher currentKey nextKey reportPushResult)
+    )
+
+mkServiceDriverSP2 ::
+  forall m.
+  AgentContext m StandardCrypto => ServiceDriver m StandardCrypto
+mkServiceDriverSP2 =
+  ServiceDriver
+    ( versionIdentifier (Proxy @(SP2.ServiceProtocol _)) )
+    ( \bearer tracer currentKey nextKey reportPushResult -> do
+        void $
+          runPeerWithDriver
+            (SP2.serviceDriver bearer tracer)
+            (SP2.servicePusher currentKey nextKey reportPushResult)
     )
 
 instance ServiceCrypto StandardCrypto where
   availableServiceDrivers =
-    [ mkServiceDriverSP1
+    [ mkServiceDriverSP2
+    , mkServiceDriverSP1
     , mkServiceDriverSP0
     ]
 
@@ -866,7 +930,7 @@ mkControlDriverCP0 =
           (CP0.controlDriver bearer tracer)
           ( CP0.controlReceiver
               (genKey agent)
-              (dropKey agent)
+              (dropStagedKey agent)
               (queryKey agent)
               (installKey agent)
               (fromAgentInfo <$> getInfo agent)
@@ -890,16 +954,41 @@ mkControlDriverCP1 =
           (CP1.controlDriver bearer tracer)
           ( CP1.controlReceiver
               (genKey agent)
-              (dropKey agent)
+              (dropStagedKey agent)
               (queryKey agent)
               (installKey agent)
               (fromAgentInfo <$> getInfo agent)
           )
   )
 
+mkControlDriverCP2 ::
+  forall m fd addr.
+  AgentContext m StandardCrypto =>
+  ( VersionIdentifier
+  , RawBearer m ->
+    Tracer m ControlDriverTrace ->
+    Agent StandardCrypto m fd addr ->
+    m ()
+  )
+mkControlDriverCP2 =
+  ( versionIdentifier (Proxy @(CP2.ControlProtocol _))
+  , \bearer tracer agent ->
+      void $
+        runPeerWithDriver
+          (CP2.controlDriver bearer tracer)
+          ( CP2.controlReceiver
+              (genKey agent)
+              (dropStagedKey agent)
+              (queryKey agent)
+              (installKey agent)
+              (dropKey agent)
+              (fromAgentInfo <$> getInfo agent)
+          )
+  )
+
 instance ControlCrypto StandardCrypto where
   availableControlDrivers =
-    [mkControlDriverCP1, mkControlDriverCP0]
+    [mkControlDriverCP2, mkControlDriverCP1, mkControlDriverCP0]
 
 instance ControlCrypto MockCrypto where
   availableControlDrivers =
@@ -1035,6 +1124,7 @@ runAgent agent = do
           (agentMRB agent)
           scOpts
           (pushKey agent)
+          (RecvOK <$ dropKey agent)
           (parentTracer <> connStatTracer)
 
   let runBootstraps =
