@@ -313,11 +313,15 @@ data Agent c m fd addr
   , agentOptions :: AgentOptions m addr c
   , agentCurrentKeyVar :: TMVar m (Maybe (Bundle m c))
   , agentStagedKeyVar :: TMVar m (Maybe (CRef m (SignKeyWithPeriodKES (KES c))))
-  , agentNextKeyChan :: TChan m (Bundle m c)
+  , agentNextKeyChan :: TChan m (BundleMutation m c)
   , agentServiceFD :: fd
   , agentControlFD :: Maybe fd
   , agentBootstrapConnections :: TMVar m (Map Text ConnectionStatus)
   }
+
+data BundleMutation m c
+  = SetBundle (Bundle m c)
+  | DropBundle
 
 newAgent ::
   forall c m fd addr.
@@ -676,7 +680,7 @@ pushKey agent bundle = do
               -- such that when the consumer picks up the signal, the next update
               -- will be the correct one. Since the MVar is empty at this point, the
               -- consumers will block until we put the key back in.
-              writeTChan (agentNextKeyChan agent) bundle
+              writeTChan (agentNextKeyChan agent) (SetBundle bundle)
               return (Just bundle, RecvOK)
 
         case oldKeyOcMay of
@@ -761,59 +765,63 @@ runListener
 
     (accept s fd >>= loop) `catch` logAndContinue
 
+data ServiceDriver m c =
+  ServiceDriver
+    { serviceDriverVersionID :: VersionIdentifier
+    , serviceDriverRun :: ServiceDriverRun m c
+    }
+
+type ServiceDriverRun m c =
+           RawBearer m
+        -> Tracer m ServiceDriverTrace
+        -> m (Bundle m c)
+        -> m (Maybe (Bundle m c))
+        -> (RecvResult -> m ())
+        -> m ()
+
+lookupServiceDriver :: VersionIdentifier
+                    -> [ServiceDriver m c]
+                    -> Maybe (ServiceDriverRun m c)
+lookupServiceDriver _ []
+  = Nothing
+lookupServiceDriver vid (x:xs)
+  | serviceDriverVersionID x == vid
+  = Just (serviceDriverRun x)
+  | otherwise
+  = lookupServiceDriver vid xs
+
 class ServiceCrypto c where
   availableServiceDrivers ::
     forall m.
-    AgentContext m c =>
-    [ ( VersionIdentifier
-      , RawBearer m ->
-        Tracer m ServiceDriverTrace ->
-        m (Bundle m c) ->
-        m (Bundle m c) ->
-        (RecvResult -> m ()) ->
-        m ()
-      )
-    ]
+    AgentContext m c => [ ServiceDriver m c ]
 
 mkServiceDriverSP0 ::
   forall m c.
-  AgentContext m c =>
-  ( VersionIdentifier
-  , RawBearer m ->
-    Tracer m ServiceDriverTrace ->
-    m (Bundle m c) ->
-    m (Bundle m c) ->
-    (RecvResult -> m ()) ->
-    m ()
-  )
+  AgentContext m c => ServiceDriver m c
 mkServiceDriverSP0 =
-  ( versionIdentifier (Proxy @(SP0.ServiceProtocol _ c))
-  , \bearer tracer currentKey nextKey reportPushResult ->
-      void $
-        runPeerWithDriver
-          (SP0.serviceDriver bearer tracer)
-          (SP0.servicePusher currentKey nextKey reportPushResult)
-  )
+  ServiceDriver
+    ( versionIdentifier (Proxy @(SP0.ServiceProtocol _ c)) )
+    ( \bearer tracer currentKey nextKey reportPushResult -> do
+        let nextKey' = nextKey >>= maybe (error "DropKey command not supported")return
+        void $
+          runPeerWithDriver
+            (SP0.serviceDriver bearer tracer)
+            (SP0.servicePusher currentKey nextKey' reportPushResult)
+    )
 
 mkServiceDriverSP1 ::
   forall m.
-  MonadAgent m =>
-  ( VersionIdentifier
-  , RawBearer m ->
-    Tracer m ServiceDriverTrace ->
-    m (Bundle m StandardCrypto) ->
-    m (Bundle m StandardCrypto) ->
-    (RecvResult -> m ()) ->
-    m ()
-  )
+  AgentContext m StandardCrypto => ServiceDriver m StandardCrypto
 mkServiceDriverSP1 =
-  ( versionIdentifier (Proxy @(SP1.ServiceProtocol _))
-  , \bearer tracer currentKey nextKey reportPushResult ->
-      void $
-        runPeerWithDriver
-          (SP1.serviceDriver bearer tracer)
-          (SP1.servicePusher currentKey nextKey reportPushResult)
-  )
+  ServiceDriver
+    ( versionIdentifier (Proxy @(SP1.ServiceProtocol _)) )
+    ( \bearer tracer currentKey nextKey reportPushResult -> do
+        let nextKey' = nextKey >>= maybe (error "DropKey command not supported")return
+        void $
+          runPeerWithDriver
+            (SP1.serviceDriver bearer tracer)
+            (SP1.servicePusher currentKey nextKey' reportPushResult)
+    )
 
 instance ServiceCrypto StandardCrypto where
   availableServiceDrivers =
@@ -954,7 +962,10 @@ runAgent agent = do
 
         let currentKey = atomically $ do
               readTMVar (agentCurrentKeyVar agent) >>= maybe retry return
-        let nextKey = atomically $ readTChan nextKeyChanRcv
+        let nextKey = atomically $ do
+              readTChan nextKeyChanRcv >>= \case
+                DropBundle -> return Nothing
+                SetBundle bundle -> return (Just bundle)
 
         let reportPushResult = const (return ())
 
@@ -977,8 +988,8 @@ runAgent agent = do
                       bearer
                       (AgentVersionHandshakeDriverTrace >$< (agentTracer . agentOptions $ agent))
                   )
-                  (versionHandshakeServer (map fst (availableServiceDrivers @c @m)))
-              case protocolVersionMay >>= (`lookup` (availableServiceDrivers @c @m)) of
+                  (versionHandshakeServer (map serviceDriverVersionID (availableServiceDrivers @c @m)))
+              case protocolVersionMay >>= (`lookupServiceDriver` (availableServiceDrivers @c @m)) of
                 Nothing ->
                   traceWith (agentTracer . agentOptions $ agent) AgentServiceVersionHandshakeFailed
                 Just run ->
