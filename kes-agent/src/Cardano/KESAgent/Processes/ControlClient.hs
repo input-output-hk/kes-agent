@@ -34,7 +34,6 @@ import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionHandshake.Driver
 import Cardano.KESAgent.Protocols.VersionHandshake.Peers
-import Cardano.KESAgent.Protocols.VersionHandshake.Protocol
 import Cardano.KESAgent.Protocols.VersionedProtocol (
   NamedCrypto,
   VersionIdentifier,
@@ -42,10 +41,8 @@ import Cardano.KESAgent.Protocols.VersionedProtocol (
  )
 import Cardano.KESAgent.Serialization.DirectCodec
 import Cardano.KESAgent.Util.Pretty (Pretty (..))
-import Cardano.KESAgent.Util.RefCounting (CRef, withCRef)
 import Cardano.KESAgent.Util.RetrySocket (retrySocketWith)
 
-import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.DirectSerialise
 import Cardano.Crypto.KES.Class
 
@@ -53,29 +50,18 @@ import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Snocket (..))
 
 import Control.Concurrent.Class.MonadMVar (MonadMVar)
-import Control.Monad (forever, void)
 import Control.Monad.Class.MonadST (MonadST)
 import Control.Monad.Class.MonadSTM (MonadSTM)
 import Control.Monad.Class.MonadThrow (MonadCatch, MonadThrow, SomeException, bracket)
 import Control.Monad.Class.MonadTimer (MonadDelay)
-import Control.Monad.Extra (whenJust)
 import Control.Tracer (Tracer, traceWith)
 import Data.Coerce
 import Data.Functor.Contravariant ((>$<))
 import Data.Kind
-import Data.Proxy (Proxy (..))
 import Data.SerDoc.Class (
-  Codec (..),
   HasInfo (..),
   Serializable (..),
-  ViaEnum (..),
-  decodeEnum,
-  encodeEnum,
-  enumInfo,
  )
-import Data.SerDoc.Info (Description (..), aliasField, annField)
-import qualified Data.SerDoc.Info
-import Data.SerDoc.TH (deriveSerDoc)
 import Data.Typeable
 import Network.TypedProtocol.Driver (runPeerWithDriver)
 import Network.TypedProtocol.Peer.Server (IsPipelined (..), Server)

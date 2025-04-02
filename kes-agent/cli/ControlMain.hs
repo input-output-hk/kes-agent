@@ -16,37 +16,25 @@ import Cardano.KESAgent.Processes.ControlClient
 import Cardano.KESAgent.Protocols.AgentInfo
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.StandardCrypto
-import Cardano.KESAgent.Protocols.Types
-import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Serialization.CBOR
-import Cardano.KESAgent.Serialization.DirectCodec
 import Cardano.KESAgent.Serialization.TextEnvelope
-import Cardano.KESAgent.Util.Pretty
-import Cardano.KESAgent.Util.RefCounting
 
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.KES.Class
 import Cardano.Crypto.Libsodium (sodiumInit)
-import Cardano.Crypto.Libsodium.MLockedSeed (mlockedSeedFinalize, mlockedSeedNewRandom)
 import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket
 
-import Control.Monad (forM_, unless, when, (>=>))
-import Control.Monad.Class.MonadThrow (SomeException, bracket, catch, throwIO)
+import Control.Monad (forM_, unless, when)
 import Control.Monad.Extra (whenJust)
 import Control.Tracer
-import qualified Data.Aeson as JSON
 import qualified Data.ByteString as BS
-import Data.Coerce
 import Data.Maybe (fromMaybe)
 import Data.Proxy
-import Data.SerDoc.Class (HasInfo, Serializable)
-import qualified Data.Text.IO as Text
 import Network.Socket
 import Options.Applicative
 import System.Environment
 import System.Exit
-import System.IO (hFlush, hPutStrLn, stderr, stdout)
 import System.IOManager
 import Text.Printf
 import Text.Read (readMaybe)

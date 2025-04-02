@@ -9,21 +9,16 @@ where
 import Cardano.KESAgent.KES.Crypto
 import Cardano.KESAgent.KES.Evolution (defEvolutionConfig, getCurrentKESPeriod)
 import Cardano.KESAgent.KES.OCert
-import Cardano.KESAgent.Protocols.AgentInfo
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.StandardCrypto
-import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Serialization.CBOR
 import Cardano.KESAgent.Serialization.TextEnvelope
 import Paths_kes_agent
 
-import Cardano.Crypto.DSIGN.Class
-import Cardano.Crypto.KES.Class
-
 import Control.Concurrent.Async
 import Control.Concurrent.Class.MonadMVar
-import Control.Monad (forever, replicateM)
-import Control.Monad.Class.MonadThrow (SomeException, bracket, catch, finally, throwIO)
+import Control.Monad (forever)
+import Control.Monad.Class.MonadThrow (SomeException, catch, throwIO)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -32,7 +27,6 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
-import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO
@@ -40,9 +34,6 @@ import System.IO.Temp
 import System.Process
 import Test.Tasty
 import Test.Tasty.HUnit
-
-import Debug.Trace
-import Text.Printf
 
 -- | Create a genesis file with the @systemStart@ parameter chosen such that the
 -- KES period will roll over within the next second.
@@ -564,8 +555,6 @@ kesAgentControlDropInstalled =
           ]
           ExitSuccess
           ["KES key installed."]
-        -- Allow some time for service client to actually receive the key
-        threadDelay 10000
         controlClientCheck
           "Key dropped"
           [ "drop-key"
@@ -574,10 +563,30 @@ kesAgentControlDropInstalled =
           ]
           ExitSuccess
           ["KES key dropped."]
+        threadDelay 100000
+        controlClientCheckP
+          "Confirm drop"
+          [ "info"
+          , "--control-address"
+          , controlAddr
+          ]
+          ExitSuccess
+          (not . any ("Current evolution:" `isPrefixOf`))
+        -- Allow some time for service client to actually receive and then drop the key
+        threadDelay 100000
+
+    -- First, make sure the key got installed
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
-      4
-      ["->", "ServiceClientBlockForging", "0"]
+      ("SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      3
+      ["ServiceClientWaitingForCredentials", "->", "ServiceClientBlockForging", "0"]
+      serviceOutLines
+
+    -- Then make sure it got deleted again
+    assertMatchingOutputLinesWith
+      ("SERVICE OUTPUT CHECK 2\n" <> (Text.unpack . Text.unlines $ agentOutLines))
+      3
+      ["ServiceClientBlockForging", "->", "ServiceClientWaitingForCredentials", "0"]
       serviceOutLines
 
 kesAgentControlInstallMultiNodes :: Assertion

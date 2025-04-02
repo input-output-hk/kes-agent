@@ -24,7 +24,6 @@ import Data.SerDoc.Class (
   ViaEnum (..),
   decodeEnum,
   encodeEnum,
-  enumInfo,
  )
 import Data.Word
 

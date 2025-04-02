@@ -28,6 +28,7 @@ common project-config
          -threaded
          -rtsopts=all
          -haddock
+         -Wunused-imports
 
 common base-dependencies
     build-depends: base >=4.14.0.0 && <4.20.0.0
@@ -37,12 +38,18 @@ library
     import: base-dependencies
     exposed-modules:
                    Cardano.KESAgent.Priority
-                   Cardano.KESAgent.KES.Classes
                    Cardano.KESAgent.KES.Evolution
                    Cardano.KESAgent.KES.Crypto
                    Cardano.KESAgent.KES.OCert
                    Cardano.KESAgent.KES.Bundle
                    Cardano.KESAgent.Processes.Agent
+                   Cardano.KESAgent.Processes.Agent.Type
+                   Cardano.KESAgent.Processes.Agent.Context
+                   Cardano.KESAgent.Processes.Agent.ControlActions
+                   Cardano.KESAgent.Processes.Agent.CommonActions
+                   Cardano.KESAgent.Processes.Agent.ControlDrivers
+                   Cardano.KESAgent.Processes.Agent.Monad
+                   Cardano.KESAgent.Processes.Agent.ServiceDrivers
                    Cardano.KESAgent.Processes.ControlClient
                    Cardano.KESAgent.Processes.ServiceClient
                    Cardano.KESAgent.Serialization.CBOR

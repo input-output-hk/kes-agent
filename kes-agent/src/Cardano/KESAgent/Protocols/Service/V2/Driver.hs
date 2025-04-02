@@ -22,7 +22,6 @@ where
 import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
 import Cardano.KESAgent.KES.OCert
-import Cardano.KESAgent.Protocols.BearerUtil
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
@@ -30,60 +29,32 @@ import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Serialization.DirectCodec
 import Cardano.KESAgent.Serialization.RawUtil
-import Cardano.KESAgent.Util.Pretty
-import Cardano.KESAgent.Util.RefCounting
 
-import Cardano.Binary
 import Cardano.Crypto.DirectSerialise
 import Cardano.Crypto.KES.Class
-import Cardano.Crypto.Libsodium.Memory (
-  allocaBytes,
-  copyMem,
-  packByteStringCStringLen,
-  unpackByteStringCStringLen,
- )
 
 import Ouroboros.Network.RawBearer
 
 import Control.Concurrent.Class.MonadMVar
 import Control.Concurrent.Class.MonadSTM
-import Control.Concurrent.Class.MonadSTM.TChan
-import Control.Monad (forM_, forever, void, when)
-import Control.Monad.Class.MonadAsync
 import Control.Monad.Class.MonadST
-import Control.Monad.Class.MonadThrow (Exception, MonadThrow, bracket, throwIO)
-import Control.Monad.ST.Unsafe (unsafeIOToST)
+import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Trans (lift)
 import Control.Tracer (Tracer, traceWith)
-import Data.Binary (decode, encode)
-import Data.ByteString qualified as BS
-import Data.ByteString.Lazy qualified as LBS
-import Data.Coerce
 import Data.Functor.Contravariant ((>$<))
 import Data.Proxy
 import Data.SerDoc.Class (
-  Codec (..),
   HasInfo (..),
   Serializable (..),
-  ViaEnum (..),
   decodeEnum,
   encodeEnum,
-  enumInfo,
  )
-import Data.SerDoc.Info (Description (..), aliasField, annField)
-import Data.SerDoc.Info qualified
-import Data.SerDoc.TH (deriveSerDoc)
+import Data.SerDoc.Info (aliasField, annField)
 import Data.Text qualified as Text
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import Data.Typeable
+import Data.Text.Encoding (decodeUtf8)
 import Data.Word
-import Foreign (Ptr, castPtr, plusPtr, poke)
-import Foreign.C.Types (CChar, CSize)
-import Foreign.Marshal.Alloc (free, mallocBytes)
-import Foreign.Marshal.Utils (copyBytes)
 import Network.TypedProtocol.Core
 import Network.TypedProtocol.Driver
-import Text.Printf
 
 data KeyMessageTypeID
   = KeyMessageID
@@ -126,14 +97,16 @@ serviceDriver s tracer =
         sendVersion (Proxy @(ServiceProtocol m)) s (ServiceDriverSendingVersionID >$< tracer)
       (SInitialState, AbortMessage) -> do
         return ()
-      (SIdleState, KeyMessage bundle) -> do
+      (SIdleState, KeyMessage bundle timestamp) -> do
         traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle))
         sendItem s KeyMessageID
+        sendItem s timestamp
         sendItem s bundle
         traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle))
-      (SIdleState, DropKeyMessage) -> do
+      (SIdleState, DropKeyMessage timestamp) -> do
         traceWith tracer $ ServiceDriverRequestingKeyDrop
         sendItem s DropKeyMessageID
+        sendItem s timestamp
         traceWith tracer $ ServiceDriverRequestedKeyDrop
       (SIdleState, ServerDisconnectMessage) -> do
         return ()
@@ -173,12 +146,14 @@ serviceDriver s tracer =
           case what of
             KeyMessageID -> do
               lift $ traceWith tracer ServiceDriverReceivingKey
+              timestamp <- receiveItem s
               bundle <- receiveItem s
               lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle))
-              return (SomeMessage (KeyMessage bundle), ())
+              return (SomeMessage (KeyMessage bundle timestamp), ())
             DropKeyMessageID -> do
               lift $ traceWith tracer ServiceDriverDroppingKey
-              return (SomeMessage DropKeyMessage, ())
+              timestamp <- receiveItem s
+              return (SomeMessage (DropKeyMessage timestamp), ())
         case result of
           ReadOK msg ->
             return msg

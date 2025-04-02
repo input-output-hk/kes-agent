@@ -13,7 +13,6 @@ import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.Control.V2.Protocol
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.StandardCrypto
-import Cardano.KESAgent.Util.RefCounting
 
 import Cardano.Crypto.KES.Class
 

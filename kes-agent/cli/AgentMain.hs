@@ -30,13 +30,11 @@ import Data.Bifunctor
 import Data.ByteString (ByteString)
 import Data.Char
 import Data.Maybe
-import Data.Monoid
 import Data.Proxy (Proxy (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
-import qualified Data.Text.IO as Text
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Network.Socket hiding (Debug)
 import Options.Applicative
@@ -46,15 +44,12 @@ import System.FilePath ((</>))
 import System.IO (hFlush, stdout)
 import System.IOManager
 import Text.Printf
-import Text.Read (readMaybe)
 import Toml (TomlCodec, (.=))
 import qualified Toml
 #if !defined(mingw32_HOST_OS)
 import System.Posix.Daemonize
 import System.Posix.Files as Posix
-import System.Posix.Types as Posix
 import System.Posix.User as Posix
-import System.Posix.Syslog.Priority
 #endif
 
 data NormalModeOptions
@@ -416,8 +411,10 @@ agentTracePrio (AgentBootstrapTrace ServiceClientDroppedKey {}) = Notice
 agentTracePrio (AgentBootstrapTrace ServiceClientAbnormalTermination {}) = Error
 agentTracePrio (AgentBootstrapTrace ServiceClientOpCertNumberCheck {}) = Debug
 agentTracePrio AgentReplacingPreviousKey {} = Notice
+agentTracePrio AgentDroppingKey {} = Notice
 agentTracePrio AgentRejectingKey {} = Warning
 agentTracePrio AgentInstallingNewKey {} = Notice
+agentTracePrio AgentInstallingKeyDrop {} = Notice
 agentTracePrio AgentSkippingOldKey {} = Info
 agentTracePrio AgentServiceSocketClosed {} = Notice
 agentTracePrio AgentListeningOnServiceSocket {} = Notice

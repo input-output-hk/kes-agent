@@ -10,11 +10,9 @@ where
 
 import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
-import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
-import Cardano.KESAgent.Util.RefCounting
 
 import Cardano.Crypto.KES.Class
 
@@ -31,10 +29,9 @@ serviceReceiver ::
   forall (m :: Type -> Type).
   KESAlgorithm (KES StandardCrypto) =>
   Monad m =>
-  (Bundle m StandardCrypto -> m RecvResult) ->
-  m RecvResult ->
+  (TaggedBundle m StandardCrypto -> m RecvResult) ->
   Client (ServiceProtocol m) NonPipelined InitialState m ()
-serviceReceiver receiveBundle dropBundle =
+serviceReceiver receiveBundle =
   Client.Await $ \case
     VersionMessage -> go
     AbortMessage -> Client.Done ()
@@ -42,13 +39,13 @@ serviceReceiver receiveBundle dropBundle =
   where
     go :: Client (ServiceProtocol m) NonPipelined IdleState m ()
     go = Client.Await $ \case
-      KeyMessage bundle ->
+      KeyMessage bundle timestamp ->
         Client.Effect $ do
-          result <- receiveBundle bundle
+          result <- receiveBundle (TaggedBundle (Just bundle) timestamp)
           return $ Client.Yield (RecvResultMessage result) go
-      DropKeyMessage ->
+      DropKeyMessage timestamp ->
         Client.Effect $ do
-          result <- dropBundle
+          result <- receiveBundle (TaggedBundle Nothing timestamp)
           return $ Client.Yield (RecvResultMessage result) go
       ProtocolErrorMessage ->
         Client.Done ()
@@ -61,16 +58,16 @@ servicePusher ::
   MonadThrow m =>
   MonadAsync m =>
   MonadTimer m =>
-  m (Bundle m StandardCrypto) ->
-  m (Maybe (Bundle m StandardCrypto)) ->
+  m (TaggedBundle m StandardCrypto) ->
+  m (TaggedBundle m StandardCrypto) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m) NonPipelined InitialState m ()
 servicePusher currentKey nextKey handleResult =
   Server.Yield VersionMessage $
     Server.Effect $ do
-      bundle <- currentKey
+      TaggedBundle bundleMay timestamp <- currentKey
       return $
-        Server.Yield (KeyMessage bundle) $
+        Server.Yield ((maybe DropKeyMessage KeyMessage bundleMay) timestamp) $
           Server.Await $
             \(RecvResultMessage result) -> goR result
   where
@@ -81,8 +78,8 @@ servicePusher currentKey nextKey handleResult =
 
     go :: m (Server (ServiceProtocol m) NonPipelined IdleState m ())
     go = do
-      bundleMay <- nextKey
+      TaggedBundle bundleMay timestamp <- nextKey
       return $
-        Server.Yield (maybe DropKeyMessage KeyMessage bundleMay) $
+        Server.Yield ((maybe DropKeyMessage KeyMessage bundleMay) timestamp) $
           Server.Await $
             \(RecvResultMessage result) -> goR result

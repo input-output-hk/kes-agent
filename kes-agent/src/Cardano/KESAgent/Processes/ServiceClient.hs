@@ -9,10 +9,8 @@
 module Cardano.KESAgent.Processes.ServiceClient
 where
 
-import Cardano.KESAgent.KES.Bundle (Bundle (..))
+import Cardano.KESAgent.KES.Bundle (TaggedBundle (..))
 import Cardano.KESAgent.KES.Crypto (Crypto (..))
-import Cardano.KESAgent.KES.OCert (OCert (..))
-import Cardano.KESAgent.Protocols.AgentInfo
 import Cardano.KESAgent.Protocols.RecvResult (RecvResult (..))
 import qualified Cardano.KESAgent.Protocols.Service.V0.Driver as SP0
 import qualified Cardano.KESAgent.Protocols.Service.V0.Peers as SP0
@@ -26,24 +24,15 @@ import qualified Cardano.KESAgent.Protocols.Service.V2.Protocol as SP2
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
 import Cardano.KESAgent.Protocols.VersionHandshake.Driver
-import Cardano.KESAgent.Protocols.VersionHandshake.Driver (
-  VersionHandshakeDriverTrace,
-  versionHandshakeDriver,
- )
 import Cardano.KESAgent.Protocols.VersionHandshake.Peers
-import Cardano.KESAgent.Protocols.VersionHandshake.Peers (versionHandshakeClient)
-import Cardano.KESAgent.Protocols.VersionHandshake.Protocol
-import Cardano.KESAgent.Protocols.VersionHandshake.Protocol (VersionHandshakeProtocol)
 import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Serialization.DirectCodec
 import Cardano.KESAgent.Util.PlatformPoison (poisonWindows)
 import Cardano.KESAgent.Util.Pretty (Pretty (..))
-import Cardano.KESAgent.Util.RefCounting (CRef)
 import Cardano.KESAgent.Util.RetrySocket (retrySocket)
 
-import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.DirectSerialise
-import Cardano.Crypto.KES.Class (SignKeyKES, SignKeyWithPeriodKES (..), VerKeyKES)
+import Cardano.Crypto.KES.Class (SignKeyKES, VerKeyKES)
 
 import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Snocket (..))
@@ -55,21 +44,8 @@ import Control.Monad.Class.MonadST
 import Control.Monad.Class.MonadThrow (MonadCatch, MonadThrow, SomeException, bracket, catch)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Control.Tracer (Tracer, traceWith)
-import Data.Coerce
 import Data.Functor.Contravariant ((>$<))
-import Data.Proxy (Proxy (..))
-import Data.SerDoc.Class (
-  Codec (..),
-  HasInfo (..),
-  Serializable (..),
-  ViaEnum (..),
-  decodeEnum,
-  encodeEnum,
-  enumInfo,
- )
-import Data.SerDoc.Info (Description (..), aliasField, annField)
-import qualified Data.SerDoc.Info
-import Data.SerDoc.TH (deriveSerDoc)
+import Data.SerDoc.Class (HasInfo (..))
 import Data.Typeable
 import Data.Word (Word64)
 import Network.TypedProtocol.Driver (runPeerWithDriver)
@@ -132,8 +108,7 @@ class ServiceClientDrivers c where
     [ ( VersionIdentifier
       , RawBearer m ->
         Tracer m ServiceClientTrace ->
-        (Bundle m c -> m RecvResult) ->
-        (m RecvResult) ->
+        (TaggedBundle m c -> m RecvResult) ->
         m ()
       )
     ]
@@ -144,17 +119,19 @@ mkServiceClientDriverSP0 ::
   ( VersionIdentifier
   , RawBearer m ->
     Tracer m ServiceClientTrace ->
-    (Bundle m c -> m RecvResult) ->
-    (m RecvResult) ->
+    (TaggedBundle m c -> m RecvResult) ->
     m ()
   )
 mkServiceClientDriverSP0 =
   ( versionIdentifier (Proxy @(SP0.ServiceProtocol _ StandardCrypto))
-  , \bearer tracer handleKey _dropKey ->
+  , \bearer tracer handleKey ->
       void $
         runPeerWithDriver
           (SP0.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
-          (SP0.serviceReceiver $ \bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey)
+          (SP0.serviceReceiver $
+            \bundle ->
+              handleKey (TaggedBundle (Just bundle) 0) <* traceWith tracer ServiceClientReceivedKey
+          )
   )
 
 mkServiceClientDriverSP1 ::
@@ -163,17 +140,18 @@ mkServiceClientDriverSP1 ::
   ( VersionIdentifier
   , RawBearer m ->
     Tracer m ServiceClientTrace ->
-    (Bundle m StandardCrypto -> m RecvResult) ->
-    (m RecvResult) ->
+    (TaggedBundle m StandardCrypto -> m RecvResult) ->
     m ()
   )
 mkServiceClientDriverSP1 =
   ( versionIdentifier (Proxy @(SP1.ServiceProtocol _))
-  , \bearer tracer handleKey _dropKey ->
+  , \bearer tracer handleKey ->
       void $
         runPeerWithDriver
           (SP1.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
-          (SP1.serviceReceiver $ \bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey)
+          (SP1.serviceReceiver $ \bundle ->
+              handleKey (TaggedBundle (Just bundle) 0) <* traceWith tracer ServiceClientReceivedKey
+          )
   )
 
 mkServiceClientDriverSP2 ::
@@ -182,19 +160,17 @@ mkServiceClientDriverSP2 ::
   ( VersionIdentifier
   , RawBearer m ->
     Tracer m ServiceClientTrace ->
-    (Bundle m StandardCrypto -> m RecvResult) ->
-    (m RecvResult) ->
+    (TaggedBundle m StandardCrypto -> m RecvResult) ->
     m ()
   )
 mkServiceClientDriverSP2 =
   ( versionIdentifier (Proxy @(SP2.ServiceProtocol _))
-  , \bearer tracer handleKey dropKey ->
+  , \bearer tracer handleKey ->
       void $
         runPeerWithDriver
           (SP2.serviceDriver bearer $ ServiceClientDriverTrace >$< tracer)
           (SP2.serviceReceiver
-            (\bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey)
-            (dropKey <* traceWith tracer ServiceClientDroppedKey))
+            (\bundle -> handleKey bundle <* traceWith tracer ServiceClientReceivedKey))
   )
 
 instance ServiceClientDrivers StandardCrypto where
@@ -223,13 +199,12 @@ runServiceClientForever ::
   Proxy c ->
   MakeRawBearer m fd ->
   ServiceClientOptions m fd addr ->
-  (Bundle m c -> m RecvResult) ->
-  m RecvResult ->
+  (TaggedBundle m c -> m RecvResult) ->
   Tracer m ServiceClientTrace ->
   m ()
-runServiceClientForever proxy mrb options handleKey dropKey tracer =
+runServiceClientForever proxy mrb options handleKey tracer =
   forever $ do
-    runServiceClient proxy mrb options handleKey dropKey tracer `catch` handle
+    runServiceClient proxy mrb options handleKey tracer `catch` handle
     threadDelay 1000000
   where
     handle :: SomeException -> m ()
@@ -246,32 +221,21 @@ runServiceClient ::
   Proxy c ->
   MakeRawBearer m fd ->
   ServiceClientOptions m fd addr ->
-  (Bundle m c -> m RecvResult) ->
-  m RecvResult ->
+  (TaggedBundle m c -> m RecvResult) ->
   Tracer m ServiceClientTrace ->
   m ()
-runServiceClient proxy mrb options handleKey dropKey tracer = do
+runServiceClient proxy mrb options handleKey tracer = do
   poisonWindows
   let s = serviceClientSnocket options
-  latestOCNumVar <- newMVar Nothing
-  let handleKey' bundle = do
-        latestOCNumMay <- takeMVar latestOCNumVar
-        case latestOCNumMay of
-          Nothing -> do
-            -- No key previously handled, so we need to accept this one
-            putMVar latestOCNumVar (Just $ ocertN (bundleOC bundle))
-            handleKey bundle
-          Just latestOCNum -> do
-            -- Have already handled a key before, so check that the received key
-            -- is newer; if not, discard it.
-            traceWith tracer $ ServiceClientOpCertNumberCheck (ocertN (bundleOC bundle)) latestOCNum
-            if ocertN (bundleOC bundle) > latestOCNum
-              then do
-                putMVar latestOCNumVar (Just $ ocertN (bundleOC bundle))
-                handleKey bundle
-              else do
-                putMVar latestOCNumVar (Just latestOCNum)
-                return RecvErrorKeyOutdated
+  latestTimestampVar <- newMVar Nothing
+  let handleKey' tbundle@(TaggedBundle bundleMay timestamp) = do
+        latestTimestamp <- takeMVar latestTimestampVar
+        if Just timestamp <= latestTimestamp then do
+          putMVar latestTimestampVar latestTimestamp
+          return RecvErrorKeyOutdated
+        else do
+          putMVar latestTimestampVar (Just timestamp)
+          handleKey tbundle
 
   void $
     bracket
@@ -296,5 +260,5 @@ runServiceClient proxy mrb options handleKey dropKey tracer = do
             Nothing ->
               traceWith tracer ServiceClientVersionHandshakeFailed
             Just run ->
-              run bearer tracer handleKey' dropKey
+              run bearer tracer handleKey'
       )
