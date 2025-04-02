@@ -30,7 +30,7 @@ controlReceiver ::
   m (Maybe (VerKeyKES (KES StandardCrypto))) ->
   m (Maybe (VerKeyKES (KES StandardCrypto))) ->
   (OCert StandardCrypto -> m RecvResult) ->
-  m (Maybe (VerKeyKES (KES StandardCrypto))) ->
+  m RecvResult ->
   m AgentInfo ->
   Client (ControlProtocol m) NonPipelined InitialState m ()
 controlReceiver genKey dropStagedKey queryKey installKey dropKey getAgentInfo =
@@ -59,8 +59,8 @@ controlReceiver genKey dropStagedKey queryKey installKey dropKey getAgentInfo =
           return $ Client.Yield (PublicKeyMessage vkeyMay) go
       DropKeyMessage ->
         Client.Effect $ do
-          vkeyMay <- dropKey
-          return $ Client.Yield (PublicKeyMessage vkeyMay) go
+          result <- dropKey
+          return $ Client.Yield (DropKeyResultMessage result) go
       RequestInfoMessage ->
         Client.Effect $ do
           info <- getAgentInfo
@@ -125,13 +125,13 @@ controlDropKey ::
   forall (m :: (Type -> Type)).
   MonadSTM m =>
   MonadThrow m =>
-  ControlServer m (Maybe (VerKeyKES (KES StandardCrypto)))
+  ControlServer m RecvResult
 controlDropKey = do
   Server.Yield VersionMessage $
     Server.Yield DropKeyMessage $
-      Server.Await $ \(PublicKeyMessage vkeyMay) ->
+      Server.Await $ \(DropKeyResultMessage result) ->
         Server.Yield EndMessage $
-          Server.Done vkeyMay
+          Server.Done result
 
 
 controlGetInfo ::

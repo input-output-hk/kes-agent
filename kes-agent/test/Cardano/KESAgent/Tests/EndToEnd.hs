@@ -555,6 +555,7 @@ kesAgentControlDropInstalled =
           ]
           ExitSuccess
           ["KES key installed."]
+        threadDelay 100000
         controlClientCheck
           "Key dropped"
           [ "drop-key"
@@ -573,7 +574,7 @@ kesAgentControlDropInstalled =
           ExitSuccess
           (not . any ("Current evolution:" `isPrefixOf`))
         -- Allow some time for service client to actually receive and then drop the key
-        threadDelay 100000
+        threadDelay 200000
 
     -- First, make sure the key got installed
     assertMatchingOutputLinesWith
@@ -1180,7 +1181,7 @@ withAgent controlAddr serviceAddr bootstrapAddrs coldVerKeyFile extraAgentArgs a
 
 withService :: FilePath -> IO a -> IO ([Text.Text], a)
 withService serviceAddr action =
-  withSpawnProcess "kes-service-client-demo" args $ \_ (Just hOut) _ ph -> do
+  withSpawnProcess "kes-service-client-demo" args $ \_ (Just hOut) (Just hErr) ph -> do
     -- The service clients may start up faster than the agent, in which case
     -- the first connection attempt will fail. It will try again 100
     -- milliseconds later, so we wait 110 milliseconds before launching the
@@ -1189,7 +1190,8 @@ withService serviceAddr action =
     retval <- action
     terminateProcess ph
     outT <- Text.lines <$> Text.hGetContents hOut
-    return (outT, retval)
+    errT <- Text.lines <$> Text.hGetContents hErr
+    return (outT <> errT, retval)
   where
     args = ["--service-address", serviceAddr]
 

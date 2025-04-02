@@ -144,22 +144,25 @@ class FromAgentInfo c a where
 instance FromAgentInfo c (CP0.AgentInfo c) where
   fromAgentInfo info =
     CP0.AgentInfo
-      { CP0.agentInfoCurrentBundle = convertBundleInfoCP0 <$> agentInfoCurrentBundle info
+      { CP0.agentInfoCurrentBundle = convertBundleInfoCP0 =<< agentInfoCurrentBundle info
       , CP0.agentInfoStagedKey = convertKeyInfoCP0 <$> agentInfoStagedKey info
       , CP0.agentInfoCurrentTime = agentInfoCurrentTime info
       , CP0.agentInfoCurrentKESPeriod = agentInfoCurrentKESPeriod info
       , CP0.agentInfoBootstrapConnections = convertBootstrapInfoCP0 <$> agentInfoBootstrapConnections info
       }
 
-convertBundleInfoCP0 :: BundleInfo c -> CP0.BundleInfo c
-convertBundleInfoCP0 info =
-  CP0.BundleInfo
-    { CP0.bundleInfoEvolution = bundleInfoEvolution info
-    , CP0.bundleInfoStartKESPeriod = bundleInfoStartKESPeriod info
-    , CP0.bundleInfoOCertN = bundleInfoOCertN info
-    , CP0.bundleInfoVK = bundleInfoVK info
-    , CP0.bundleInfoSigma = bundleInfoSigma info
-    }
+convertBundleInfoCP0 :: TaggedBundleInfo c -> Maybe (CP0.BundleInfo c)
+convertBundleInfoCP0 TaggedBundleInfo { taggedBundleInfo = Nothing } =
+  Nothing
+convertBundleInfoCP0 TaggedBundleInfo { taggedBundleInfo = Just info } =
+  Just
+    CP0.BundleInfo
+      { CP0.bundleInfoEvolution = bundleInfoEvolution info
+      , CP0.bundleInfoStartKESPeriod = bundleInfoStartKESPeriod info
+      , CP0.bundleInfoOCertN = bundleInfoOCertN info
+      , CP0.bundleInfoVK = bundleInfoVK info
+      , CP0.bundleInfoSigma = bundleInfoSigma info
+      }
 
 convertKeyInfoCP0 :: KeyInfo c -> CP0.KeyInfo c
 convertKeyInfoCP0 = coerce
@@ -179,22 +182,25 @@ convertConnectionStatusCP0 ConnectionDown = CP0.ConnectionDown
 instance FromAgentInfo StandardCrypto CP1.AgentInfo where
   fromAgentInfo info =
     CP1.AgentInfo
-      { CP1.agentInfoCurrentBundle = convertBundleInfoCP1 <$> agentInfoCurrentBundle info
+      { CP1.agentInfoCurrentBundle = convertBundleInfoCP1 =<< agentInfoCurrentBundle info
       , CP1.agentInfoStagedKey = convertKeyInfoCP1 <$> agentInfoStagedKey info
       , CP1.agentInfoCurrentTime = agentInfoCurrentTime info
       , CP1.agentInfoCurrentKESPeriod = agentInfoCurrentKESPeriod info
       , CP1.agentInfoBootstrapConnections = convertBootstrapInfoCP1 <$> agentInfoBootstrapConnections info
       }
 
-convertBundleInfoCP1 :: BundleInfo StandardCrypto -> CP1.BundleInfo
-convertBundleInfoCP1 info =
-  CP1.BundleInfo
-    { CP1.bundleInfoEvolution = bundleInfoEvolution info
-    , CP1.bundleInfoStartKESPeriod = bundleInfoStartKESPeriod info
-    , CP1.bundleInfoOCertN = bundleInfoOCertN info
-    , CP1.bundleInfoVK = bundleInfoVK info
-    , CP1.bundleInfoSigma = bundleInfoSigma info
-    }
+convertBundleInfoCP1 :: TaggedBundleInfo StandardCrypto -> Maybe CP1.BundleInfo
+convertBundleInfoCP1 TaggedBundleInfo { taggedBundleInfo = Nothing } =
+  Nothing
+convertBundleInfoCP1 TaggedBundleInfo { taggedBundleInfo = Just info } =
+  Just 
+    CP1.BundleInfo
+      { CP1.bundleInfoEvolution = bundleInfoEvolution info
+      , CP1.bundleInfoStartKESPeriod = bundleInfoStartKESPeriod info
+      , CP1.bundleInfoOCertN = bundleInfoOCertN info
+      , CP1.bundleInfoVK = bundleInfoVK info
+      , CP1.bundleInfoSigma = bundleInfoSigma info
+      }
 
 convertKeyInfoCP1 :: KeyInfo StandardCrypto -> CP1.KeyInfo
 convertKeyInfoCP1 = coerce
@@ -214,12 +220,19 @@ convertConnectionStatusCP1 ConnectionDown = CP1.ConnectionDown
 instance FromAgentInfo StandardCrypto CP2.AgentInfo where
   fromAgentInfo info =
     CP2.AgentInfo
-      { CP2.agentInfoCurrentBundle = convertBundleInfoCP2 <$> agentInfoCurrentBundle info
+      { CP2.agentInfoCurrentBundle = convertTaggedBundleInfoCP2 <$> agentInfoCurrentBundle info
       , CP2.agentInfoStagedKey = convertKeyInfoCP2 <$> agentInfoStagedKey info
       , CP2.agentInfoCurrentTime = agentInfoCurrentTime info
       , CP2.agentInfoCurrentKESPeriod = agentInfoCurrentKESPeriod info
       , CP2.agentInfoBootstrapConnections = convertBootstrapInfoCP2 <$> agentInfoBootstrapConnections info
       }
+
+convertTaggedBundleInfoCP2 :: TaggedBundleInfo StandardCrypto -> CP2.TaggedBundleInfo
+convertTaggedBundleInfoCP2 tbi =
+  CP2.TaggedBundleInfo
+    { CP2.taggedBundleInfo = convertBundleInfoCP2 <$> taggedBundleInfo tbi
+    , CP2.taggedBundleInfoTimestamp = taggedBundleInfoTimestamp tbi
+    }
 
 convertBundleInfoCP2 :: BundleInfo StandardCrypto -> CP2.BundleInfo
 convertBundleInfoCP2 info =

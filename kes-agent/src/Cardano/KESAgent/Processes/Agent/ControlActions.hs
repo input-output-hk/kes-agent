@@ -40,7 +40,7 @@ import qualified Data.Map.Strict as Map
 import Cardano.KESAgent.KES.Evolution (
   getCurrentKESPeriodWith,
  )
-import Cardano.KESAgent.KES.Bundle (TaggedBundle (..), Bundle (..), timestampFromUTC)
+import Cardano.KESAgent.KES.Bundle (TaggedBundle (..), Bundle (..), timestampFromUTC, timestampToUTC)
 import Cardano.KESAgent.KES.Crypto (Crypto (..))
 import Cardano.KESAgent.KES.OCert (OCert (..))
 import Cardano.KESAgent.Processes.Agent.CommonActions
@@ -72,15 +72,16 @@ genKey agent = do
 
 dropKey ::
   AgentContext m c =>
-  Agent c m fd addr -> m (Maybe (VerKeyKES (KES c)))
+  Agent c m fd addr -> m RecvResult
 dropKey agent =
   do
     timestamp <- timestampFromUTC <$> getCurrentTime
-    pushKeyResultVKey <$> pushKey agent
-                            TaggedBundle
-                              { taggedBundle = Nothing
-                              , taggedBundleTimestamp = timestamp
-                              }
+    pushKeyResultToRecvResult <$>
+        pushKey agent
+          TaggedBundle
+            { taggedBundle = Nothing
+            , taggedBundleTimestamp = timestamp
+            }
 
 dropStagedKey ::
   AgentContext m c =>
@@ -137,18 +138,28 @@ getInfo agent = do
     withBundle agent "get info" $ \case
       Nothing ->
         return Nothing
-      Just (TaggedBundle { taggedBundle = Nothing }) ->
-        return Nothing
-      Just (TaggedBundle { taggedBundle = Just bundle }) ->
+      Just (TaggedBundle { taggedBundle = Nothing, taggedBundleTimestamp = ts }) ->
+        return $
+          Just
+            TaggedBundleInfo
+              { taggedBundleInfo = Nothing
+              , taggedBundleInfoTimestamp = Just (timestampToUTC ts)
+              }
+      Just (TaggedBundle { taggedBundle = Just bundle, taggedBundleTimestamp = ts }) ->
         withCRefValue (bundleSKP bundle) $ \skp -> do
           return $
             Just
-              BundleInfo
-                { bundleInfoEvolution = fromIntegral $ periodKES skp
-                , bundleInfoStartKESPeriod = ocertKESPeriod (bundleOC bundle)
-                , bundleInfoOCertN = ocertN (bundleOC bundle)
-                , bundleInfoVK = ocertVkHot (bundleOC bundle)
-                , bundleInfoSigma = ocertSigma (bundleOC bundle)
+              TaggedBundleInfo
+                { taggedBundleInfo =
+                    Just
+                      BundleInfo
+                        { bundleInfoEvolution = fromIntegral $ periodKES skp
+                        , bundleInfoStartKESPeriod = ocertKESPeriod (bundleOC bundle)
+                        , bundleInfoOCertN = ocertN (bundleOC bundle)
+                        , bundleInfoVK = ocertVkHot (bundleOC bundle)
+                        , bundleInfoSigma = ocertSigma (bundleOC bundle)
+                        }
+                , taggedBundleInfoTimestamp = Just (timestampToUTC ts)
                 }
 
   keyInfoMay <- do

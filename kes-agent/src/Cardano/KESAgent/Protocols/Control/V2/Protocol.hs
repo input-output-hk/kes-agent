@@ -35,7 +35,7 @@ import Network.TypedProtocol.Core
 
 data AgentInfo
   = AgentInfo
-  { agentInfoCurrentBundle :: !(Maybe BundleInfo)
+  { agentInfoCurrentBundle :: !(Maybe TaggedBundleInfo)
   , agentInfoStagedKey :: !(Maybe KeyInfo)
   , agentInfoCurrentTime :: !UTCTime
   , agentInfoCurrentKESPeriod :: !KESPeriod
@@ -58,15 +58,23 @@ data ConnectionStatus
   | ConnectionDown
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
-data BundleInfo
-  = BundleInfo
-  { bundleInfoEvolution :: !Word32
-  , bundleInfoStartKESPeriod :: !KESPeriod
-  , bundleInfoOCertN :: !Word64
-  , bundleInfoVK :: !(VerKeyKES (KES StandardCrypto))
-  , bundleInfoSigma :: !(SignedDSIGN (DSIGN StandardCrypto) (OCertSignable StandardCrypto))
-  }
-  deriving (Show, Eq)
+data TaggedBundleInfo =
+  TaggedBundleInfo
+    { taggedBundleInfo :: Maybe BundleInfo
+    , taggedBundleInfoTimestamp :: Maybe UTCTime
+    }
+    deriving (Show, Eq)
+
+
+data BundleInfo =
+  BundleInfo
+    { bundleInfoEvolution :: !Word32
+    , bundleInfoStartKESPeriod :: !KESPeriod
+    , bundleInfoOCertN :: !Word64
+    , bundleInfoVK :: !(VerKeyKES (KES StandardCrypto))
+    , bundleInfoSigma :: !(SignedDSIGN (DSIGN StandardCrypto) (OCertSignable StandardCrypto))
+    }
+    deriving (Show, Eq)
 
 newtype KeyInfo
   = KeyInfo
@@ -99,6 +107,8 @@ data ControlProtocol (m :: Type -> Type) where
   -- | Client has made a request that will result in a public key being
   -- returned.
   WaitForPublicKeyState :: ControlProtocol m
+  -- | Client has requested an installed key to be dropped.
+  WaitForDropConfirmationState :: ControlProtocol m
   -- | Client has requested agent information
   WaitForInfoState :: ControlProtocol m
   -- | An OpCert has been pushed, client must now confirm that it has been
@@ -165,6 +175,13 @@ data ControlProtocol (m :: Type -> Type) where
   )
   #-}
 {-# ANN
+  DropKeyResultMessage
+  ( Description
+      [ "Returned by the KES agent in response to a @drop-key@ request."
+      ]
+  )
+  #-}
+{-# ANN
   RequestInfoMessage
   ( Description
       [ "Ask the KES agent to report its current state."
@@ -220,7 +237,10 @@ instance Protocol (ControlProtocol m) where
       RecvResult ->
       Message (ControlProtocol m) WaitForKeyConfirmationState IdleState
     DropKeyMessage ::
-      Message (ControlProtocol m) IdleState WaitForPublicKeyState
+      Message (ControlProtocol m) IdleState WaitForDropConfirmationState
+    DropKeyResultMessage ::
+      RecvResult ->
+      Message (ControlProtocol m) WaitForDropConfirmationState IdleState
     RequestInfoMessage :: Message (ControlProtocol m) IdleState WaitForInfoState
     InfoMessage ::
       AgentInfo ->
@@ -233,6 +253,7 @@ instance Protocol (ControlProtocol m) where
   type StateAgency IdleState = ServerAgency
 
   type StateAgency WaitForKeyConfirmationState = ClientAgency
+  type StateAgency WaitForDropConfirmationState = ClientAgency
   type StateAgency WaitForPublicKeyState = ClientAgency
   type StateAgency WaitForInfoState = ClientAgency
 
@@ -244,6 +265,7 @@ data SControlProtocol (st :: ControlProtocol m) where
   SInitialState :: SControlProtocol InitialState
   SIdleState :: SControlProtocol IdleState
   SWaitForKeyConfirmationState :: SControlProtocol WaitForKeyConfirmationState
+  SWaitForDropConfirmationState :: SControlProtocol WaitForDropConfirmationState
   SWaitForPublicKeyState :: SControlProtocol WaitForPublicKeyState
   SWaitForInfoState :: SControlProtocol WaitForInfoState
   SEndState :: SControlProtocol EndState
@@ -252,6 +274,7 @@ instance StateTokenI InitialState where stateToken = SInitialState
 instance StateTokenI IdleState where stateToken = SIdleState
 instance StateTokenI WaitForKeyConfirmationState where stateToken = SWaitForKeyConfirmationState
 instance StateTokenI WaitForPublicKeyState where stateToken = SWaitForPublicKeyState
+instance StateTokenI WaitForDropConfirmationState where stateToken = SWaitForDropConfirmationState
 instance StateTokenI WaitForInfoState where stateToken = SWaitForInfoState
 instance StateTokenI EndState where stateToken = SEndState
 

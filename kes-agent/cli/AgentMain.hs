@@ -437,6 +437,9 @@ agentTracePrio AgentLockRequest {} = Debug
 agentTracePrio AgentLockAcquired {} = Debug
 agentTracePrio AgentLockReleased {} = Debug
 agentTracePrio AgentCRefEvent {} = Debug
+agentTracePrio AgentPushingKeyUpdate {} = Debug
+agentTracePrio AgentHandlingKeyUpdate {} = Debug
+agentTracePrio AgentDebugTrace {} = Debug
 
 agentTraceFormatBS :: AgentTrace -> ByteString
 agentTraceFormatBS = encodeUtf8 . Text.pack . pretty

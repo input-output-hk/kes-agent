@@ -135,13 +135,6 @@ handleKey setState TaggedBundle { taggedBundle = Nothing } = do
   setState $ ServiceClientWaitingForCredentials
   return RecvOK
 
-dropKey ::
-  (ServiceClientState -> IO ()) ->
-  IO RecvResult
-dropKey setState = do
-  setState $ ServiceClientWaitingForCredentials
-  return RecvOK
-
 hexShowBS :: ByteString -> String
 hexShowBS = concatMap (printf "%02x") . BS.unpack
 

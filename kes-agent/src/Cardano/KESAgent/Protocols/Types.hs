@@ -46,6 +46,8 @@ data ControlDriverTrace
   | ControlDriverDeclinedKey
   | ControlDriverConfirmingKeyDrop
   | ControlDriverConfirmedKeyDrop
+  | ControlDriverDecliningKeyDrop
+  | ControlDriverDeclinedKeyDrop
   | ControlDriverNoPublicKeyToReturn
   | ControlDriverNoPublicKeyToDrop
   | ControlDriverReturningPublicKey

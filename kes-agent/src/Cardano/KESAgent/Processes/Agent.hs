@@ -184,8 +184,15 @@ runAgent agent = do
         labelMyThread "service"
         nextKeyChanRcv <- atomically $ dupTChan (agentNextKeyChan agent)
 
-        let currentKey = atomically $ readTMVar (agentCurrentKeyVar agent) >>= maybe retry return
-        let nextKey = atomically $ readTChan nextKeyChanRcv
+        let currentKey = do
+              agentTrace agent $ AgentDebugTrace "Waiting for initial key"
+              key <- atomically $ readTMVar (agentCurrentKeyVar agent) >>= maybe retry return
+              agentTrace agent $ AgentDebugTrace "Got initial key"
+              return key
+
+        let nextKey = do
+              agentTrace agent $ AgentDebugTrace "Waiting for next key"
+              atomically (readTChan nextKeyChanRcv) <* agentTrace agent AgentHandlingKeyUpdate
 
         let reportPushResult = const (return ())
 

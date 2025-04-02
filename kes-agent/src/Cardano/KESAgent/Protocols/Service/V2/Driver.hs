@@ -119,6 +119,7 @@ serviceDriver s tracer =
           else
             traceWith tracer $ ServiceDriverDecliningKey reason
         sendRecvResult s reason
+        traceWith tracer ServiceDriverConfirmedKey
       (SWaitForConfirmationState, ClientDisconnectMessage) -> do
         return ()
 

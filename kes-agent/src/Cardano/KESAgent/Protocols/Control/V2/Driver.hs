@@ -117,6 +117,7 @@ instance
 
 $(deriveSerDoc ''DirectCodec [] ''BootstrapInfo)
 $(deriveSerDoc ''DirectCodec [] ''BundleInfo)
+$(deriveSerDoc ''DirectCodec [] ''TaggedBundleInfo)
 $(deriveSerDoc ''DirectCodec [] ''AgentInfo)
 
 controlDriver ::
@@ -172,6 +173,13 @@ controlDriver s tracer =
           Nothing -> traceWith tracer ControlDriverNoPublicKeyToReturn
           Just _ -> traceWith tracer ControlDriverReturningPublicKey
         sendItem s vkeyMay
+      (SWaitForDropConfirmationState, DropKeyResultMessage reason) -> do
+        if reason == RecvOK
+          then
+            traceWith tracer ControlDriverConfirmingKeyDrop
+          else
+            traceWith tracer ControlDriverDecliningKeyDrop
+        sendItem s reason
       (SWaitForKeyConfirmationState, InstallResultMessage reason) -> do
         if reason == RecvOK
           then
@@ -249,6 +257,14 @@ controlDriver s tracer =
         case result of
           ReadOK reason ->
             return (SomeMessage (InstallResultMessage reason), ())
+          err -> do
+            traceWith tracer $ readErrorToControlDriverTrace err
+            return (SomeMessage ProtocolErrorMessage, ())
+      SWaitForDropConfirmationState -> do
+        result <- runReadResultT $ receiveItem s
+        case result of
+          ReadOK reason ->
+            return (SomeMessage (DropKeyResultMessage reason), ())
           err -> do
             traceWith tracer $ readErrorToControlDriverTrace err
             return (SomeMessage ProtocolErrorMessage, ())

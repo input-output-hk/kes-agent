@@ -36,38 +36,41 @@ import Cardano.KESAgent.Util.RefCounting (
 
 data AgentTrace
   = AgentVersionHandshakeDriverTrace VersionHandshakeDriverTrace
-  | AgentServiceDriverTrace ServiceDriverTrace
-  | AgentControlDriverTrace ControlDriverTrace
-  | AgentServiceVersionHandshakeFailed
-  | AgentControlVersionHandshakeFailed
   | AgentBootstrapTrace ServiceClientTrace
-  | AgentReplacingPreviousKey String String
-  | AgentDroppingKey String
-  | AgentInstallingKeyDrop
-  | AgentRejectingKey String
-  | AgentInstallingNewKey String
-  | AgentSkippingOldKey String String
-  | AgentServiceSocketClosed String
-  | AgentListeningOnServiceSocket String
-  | AgentServiceClientConnected String String
-  | AgentServiceClientDisconnected String
-  | AgentServiceSocketError String
-  | AgentControlSocketClosed String
-  | AgentListeningOnControlSocket String
+  | AgentCheckEvolution KESPeriod
   | AgentControlClientConnected String String
   | AgentControlClientDisconnected String
-  | AgentControlSocketError String
+  | AgentControlDriverTrace ControlDriverTrace
+  | AgentControlSocketClosed String
   | AgentControlSocketDisabled
-  | AgentCheckEvolution KESPeriod
-  | AgentUpdateKESPeriod KESPeriod KESPeriod
-  | AgentKeyNotEvolved KESPeriod KESPeriod
-  | AgentNoKeyToEvolve
+  | AgentControlSocketError String
+  | AgentControlVersionHandshakeFailed
+  | AgentCRefEvent CRefEvent
+  | AgentDroppingKey String
+  | AgentInstallingKeyDrop
+  | AgentInstallingNewKey String
   | AgentKeyEvolved KESPeriod KESPeriod
   | AgentKeyExpired KESPeriod KESPeriod
-  | AgentLockRequest String
+  | AgentKeyNotEvolved KESPeriod KESPeriod
+  | AgentListeningOnControlSocket String
+  | AgentListeningOnServiceSocket String
   | AgentLockAcquired String
   | AgentLockReleased String
-  | AgentCRefEvent CRefEvent
+  | AgentLockRequest String
+  | AgentNoKeyToEvolve
+  | AgentRejectingKey String
+  | AgentReplacingPreviousKey String String
+  | AgentServiceClientConnected String String
+  | AgentServiceClientDisconnected String
+  | AgentServiceDriverTrace ServiceDriverTrace
+  | AgentServiceSocketClosed String
+  | AgentServiceSocketError String
+  | AgentServiceVersionHandshakeFailed
+  | AgentSkippingOldKey String String
+  | AgentPushingKeyUpdate
+  | AgentHandlingKeyUpdate
+  | AgentUpdateKESPeriod KESPeriod KESPeriod
+  | AgentDebugTrace String
   deriving (Show)
 
 instance Pretty AgentTrace where

@@ -447,18 +447,17 @@ runDropKey :: DropKeyOptions -> IO ()
 runDropKey dko' = withIOManager $ \ioManager -> do
   dkoEnv <- dkoFromEnv
   let dko = dko' <> dkoEnv <> defDropKeyOptions
-  vkKESMay <-
+  result <-
     runControlClientCommand
       (dkoCommon dko)
       ioManager
       controlDropKey
-  case vkKESMay of
-    Nothing -> do
+  case result of
+    RecvOK -> do
       putStrLn "KES key dropped."
-    Just vkKES -> do
+    err -> do
       putStrLn "KES key not dropped:"
-      BS.putStr $ encodeTextEnvelope (KESVerKey vkKES)
-      putStrLn ""
+      print err
 
 runGetInfo :: CommonOptions -> IO ()
 runGetInfo opt' = withIOManager $ \ioManager -> do
@@ -467,17 +466,22 @@ runGetInfo opt' = withIOManager $ \ioManager -> do
   info <- runControlClientCommand opt ioManager controlGetInfo
   printf "Current time: %s\n" $ show (agentInfoCurrentTime info)
   printf "Current KES period: %u\n" (unKESPeriod $ agentInfoCurrentKESPeriod info)
-  whenJust (agentInfoCurrentBundle info) $ \bundleInfo -> do
+  whenJust (agentInfoCurrentBundle info) $ \tbundleInfo -> do
     printf "--- Installed KES SignKey ---\n"
-    printf "VerKey: %s\n" (hexShowBS . rawSerialiseVerKeyKES $ bundleInfoVK bundleInfo)
-    printf "Valid from period: %u\n" (unKESPeriod $ bundleInfoStartKESPeriod bundleInfo)
-    printf
-      "Current evolution: %u / %u\n"
-      (bundleInfoEvolution bundleInfo)
-      (totalPeriodsKES (Proxy @(KES StandardCrypto)))
-    printf "OpCert number: %u\n" (bundleInfoOCertN bundleInfo)
-    let (SignedDSIGN sig) = bundleInfoSigma bundleInfo
-    printf "OpCert signature: %s\n" (hexShowBS . rawSerialiseSigDSIGN $ sig)
+    printf "Timestamp: %s\n" (maybe "n/a" show $ taggedBundleInfoTimestamp tbundleInfo)
+    case taggedBundleInfo tbundleInfo of
+      Nothing -> do
+        printf "{KEY DELETED}"
+      Just bundleInfo -> do
+        printf "VerKey: %s\n" (hexShowBS . rawSerialiseVerKeyKES $ bundleInfoVK bundleInfo)
+        printf "Valid from period: %u\n" (unKESPeriod $ bundleInfoStartKESPeriod bundleInfo)
+        printf
+          "Current evolution: %u / %u\n"
+          (bundleInfoEvolution bundleInfo)
+          (totalPeriodsKES (Proxy @(KES StandardCrypto)))
+        printf "OpCert number: %u\n" (bundleInfoOCertN bundleInfo)
+        let (SignedDSIGN sig) = bundleInfoSigma bundleInfo
+        printf "OpCert signature: %s\n" (hexShowBS . rawSerialiseSigDSIGN $ sig)
   whenJust (agentInfoStagedKey info) $ \keyInfo -> do
     printf "--- Staged KES SignKey ---\n"
     printf "VerKey: %s\n" (hexShowBS . rawSerialiseVerKeyKES $ keyInfoVK keyInfo)

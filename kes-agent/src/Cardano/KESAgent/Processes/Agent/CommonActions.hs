@@ -37,6 +37,7 @@ import Control.Monad (void)
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Tracer (Tracer (..), traceWith)
 import Data.Functor.Contravariant (contramap)
+import Data.Maybe (isJust, isNothing)
 import Data.Proxy (Proxy (..))
 import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Snocket (..))
@@ -270,7 +271,13 @@ isTaggedBundleAgeValid :: TaggedBundle m c
 isTaggedBundleAgeValid current new =
   checkTimestamp && checkOCerts
   where
-    checkTimestamp = taggedBundleTimestamp current < taggedBundleTimestamp new
+    checkTimestamp
+      -- When both timestamps match, deletions trump creation
+      | isNothing (taggedBundle new)
+      , isJust (taggedBundle current)
+      = taggedBundleTimestamp current <= taggedBundleTimestamp new
+      | otherwise
+      = taggedBundleTimestamp current < taggedBundleTimestamp new
     checkOCerts =
       let snCurrentMay = (ocertN . bundleOC) <$> taggedBundle current
           snNewMay = (ocertN . bundleOC) <$> taggedBundle new
@@ -286,7 +293,10 @@ pushKey ::
   TaggedBundle m c ->
   m (PushKeyResult c)
 pushKey agent tbundle = do
-  validateTaggedBundle agent tbundle >>= either handleInvalidBundle (\() -> handleValidBundle)
+  validateTaggedBundle agent tbundle >>=
+    either
+      handleInvalidBundle
+      (\() -> (handleValidBundle <* checkEvolution agent))
   where
     handleInvalidBundle :: String -> m (PushKeyResult c)
     handleInvalidBundle err = do
@@ -314,6 +324,16 @@ pushKey agent tbundle = do
 
     handleValidBundle :: m (PushKeyResult c)
     handleValidBundle = do
+      result <- setValidBundle
+      case result of
+        PushKeyOK {} ->
+          broadcastUpdate tbundle
+        _ ->
+          pure ()
+      return result
+
+    setValidBundle :: m (PushKeyResult c)
+    setValidBundle = do
       alterBundle agent "pushKey" $ \oldTBundleMay -> do
         case oldTBundleMay of
           Nothing -> do
@@ -322,7 +342,6 @@ pushKey agent tbundle = do
                 agentTrace agent $ AgentInstallingKeyDrop
               Just bundle ->
                 agentTrace agent $ AgentInstallingNewKey (formatKey (bundleOC bundle))
-            broadcastUpdate tbundle
             return (Just tbundle, PushKeyOK Nothing)
           Just oldTBundle -> do
             if isTaggedBundleAgeValid oldTBundle tbundle then do
@@ -342,7 +361,6 @@ pushKey agent tbundle = do
                     AgentReplacingPreviousKey
                       (formatKey oldOC)
                       (formatKey (bundleOC bundle))
-              broadcastUpdate tbundle
               return (Just tbundle, PushKeyOK releaseResult)
             else do
               _ <- releaseTaggedBundle tbundle
@@ -350,4 +368,6 @@ pushKey agent tbundle = do
               return (Just oldTBundle, PushKeyTooOld)
       
     broadcastUpdate :: TaggedBundle m c -> m ()
-    broadcastUpdate = atomically . writeTChan (agentNextKeyChan agent)
+    broadcastUpdate tbundle = do
+      agentTrace agent $ AgentPushingKeyUpdate
+      atomically $ writeTChan (agentNextKeyChan agent) tbundle
