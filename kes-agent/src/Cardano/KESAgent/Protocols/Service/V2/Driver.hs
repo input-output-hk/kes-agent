@@ -35,6 +35,7 @@ import Cardano.Crypto.KES.Class
 
 import Ouroboros.Network.RawBearer
 
+import Debug.Trace (traceM)
 import Control.Concurrent.Class.MonadMVar
 import Control.Concurrent.Class.MonadSTM
 import Control.Monad.Class.MonadST
@@ -143,7 +144,9 @@ serviceDriver s tracer =
             return (SomeMessage AbortMessage, ())
       SIdleState -> do
         result <- runReadResultT $ do
+          traceM "RECV key message ID"
           what <- receiveItem s
+          traceM $ "RECV: " ++ show what
           case what of
             KeyMessageID -> do
               lift $ traceWith tracer ServiceDriverReceivingKey
@@ -164,7 +167,9 @@ serviceDriver s tracer =
             traceWith tracer $ readErrorToServiceDriverTrace err
             return (SomeMessage ProtocolErrorMessage, ())
       SWaitForConfirmationState -> do
+        traceM "FFFFFF"
         result <- receiveRecvResult s
+        traceM $ "GGGGGG " <> show result
         case result of
           ReadOK response -> do
             case response of

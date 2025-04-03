@@ -54,18 +54,20 @@ servicePusher ::
   MonadThrow m =>
   MonadAsync m =>
   MonadTimer m =>
-  m (Bundle m c) ->
+  m (Maybe (Bundle m c)) ->
   m (Maybe (Bundle m c)) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m c) NonPipelined InitialState m ()
 servicePusher currentKey nextKey handleResult =
   Server.Yield VersionMessage $
     Server.Effect $ do
-      bundle <- currentKey
-      return $
-        Server.Yield (KeyMessage bundle) $
-          Server.Await $
-            \(RecvResultMessage result) -> goR result
+      currentKey >>= \case
+        Nothing -> go
+        Just bundle ->
+          return $
+            Server.Yield (KeyMessage bundle) $
+              Server.Await $
+                \(RecvResultMessage result) -> goR result
   where
     goR :: RecvResult -> Server (ServiceProtocol m c) NonPipelined IdleState m ()
     goR result = Server.Effect $ do

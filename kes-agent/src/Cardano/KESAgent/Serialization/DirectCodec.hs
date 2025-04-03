@@ -114,56 +114,56 @@ decodeWith f = do
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Int8 where
   encode _ = encodeWith sendInt8
-  decode _ = decodeWith receiveInt8
+  decode _ = decodeWith (receiveInt8 "Int8")
 
 instance HasInfo (DirectCodec m) Int16 where
   info _ _ = basicField "int16BE" $ FixedSize 2
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Int16 where
   encode _ = encodeWith sendInt16
-  decode _ = decodeWith receiveInt16
+  decode _ = decodeWith (receiveInt16 "Int16")
 
 instance HasInfo (DirectCodec m) Int32 where
   info _ _ = basicField "int32BE" $ FixedSize 4
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Int32 where
   encode _ = encodeWith sendInt32
-  decode _ = decodeWith receiveInt32
+  decode _ = decodeWith (receiveInt32 "Int32")
 
 instance HasInfo (DirectCodec m) Int64 where
   info _ _ = basicField "int64BE" $ FixedSize 8
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Int64 where
   encode _ = encodeWith sendInt64
-  decode _ = decodeWith receiveInt64
+  decode _ = decodeWith (receiveInt64 "Int64")
 
 instance HasInfo (DirectCodec m) Word8 where
   info _ _ = basicField "word8" $ FixedSize 1
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Word8 where
   encode _ = encodeWith sendWord8
-  decode _ = decodeWith receiveWord8
+  decode _ = decodeWith (receiveWord8 "Word8")
 
 instance HasInfo (DirectCodec m) Word16 where
   info _ _ = basicField "word16BE" $ FixedSize 2
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Word16 where
   encode _ = encodeWith sendWord16
-  decode _ = decodeWith receiveWord16
+  decode _ = decodeWith (receiveWord16 "Word16")
 
 instance HasInfo (DirectCodec m) Word32 where
   info _ _ = basicField "word32BE" $ FixedSize 4
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Word32 where
   encode _ = encodeWith sendWord32
-  decode _ = decodeWith receiveWord32
+  decode _ = decodeWith (receiveWord32 "Word32")
 
 instance HasInfo (DirectCodec m) Word64 where
   info _ _ = basicField "word64BE" $ FixedSize 8
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Word64 where
   encode _ = encodeWith sendWord64
-  decode _ = decodeWith receiveWord64
+  decode _ = decodeWith (receiveWord64 "Word64")
 
 -- ** 'UTCTime'
 
@@ -186,7 +186,7 @@ instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Bool where
   decode _ =
     decodeWith
       ( \s -> runReadResultT $ do
-          ReadResultT (receiveWord8 s) >>= \case
+          ReadResultT (receiveWord8 "Bool" s) >>= \case
             0 -> return False
             1 -> return True
             _ -> ReadResultT . return $ ReadMalformed "Bool"
@@ -254,7 +254,7 @@ decodeSized ::
   ReaderT (RawBearer m) (ReadResultT m) ByteString
 decodeSized n = do
   s <- ask
-  lift $ ReadResultT (receiveBS s (fromIntegral n))
+  lift $ ReadResultT (receiveBS "sized" s (fromIntegral n))
 
 -- ** 'ByteString'
 
@@ -276,8 +276,8 @@ instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) ByteString wh
   decode _ = do
     s <- ask
     lift $ do
-      len <- ReadResultT (receiveWord32 s)
-      ReadResultT (receiveBS s (fromIntegral len))
+      len <- ReadResultT (receiveWord32 "ByteString length" s)
+      ReadResultT (receiveBS "ByteString data" s (fromIntegral len))
 
 -- ** 'Text'
 
@@ -296,8 +296,8 @@ instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) Text where
     unless (actualLen == len) (error "Length mismatch")
 
   decode _ = decodeWith $ \s -> runReadResultT $ do
-    len <- ReadResultT (receiveWord32 s)
-    decodeUtf8 <$> ReadResultT (receiveBS s (fromIntegral len))
+    len <- ReadResultT (receiveWord32 "Text length" s)
+    decodeUtf8 <$> ReadResultT (receiveBS "Text data" s (fromIntegral len))
 
 -- ** Lists
 
@@ -439,7 +439,7 @@ instance
       sk <-
         directDeserialise
           ( \buf bufSize -> do
-              unsafeReceiveN s buf bufSize >>= \case
+              unsafeReceiveN "SignKeyKES" s buf bufSize >>= \case
                 ReadOK n -> do
                   when
                     (fromIntegral n /= bufSize)
@@ -766,11 +766,13 @@ instance
         encode codec $ taggedBundleTimestamp tbundle
       ) s
 
-
-  decode codec =
-    TaggedBundle
-      <$> decode codec
-      <*> decode codec
+  decode codec = do
+    b <- decode codec
+    t <- decode codec
+    return TaggedBundle
+      { taggedBundle = b
+      , taggedBundleTimestamp = t
+      }
 
 instance
   ( HasInfo (DirectCodec m) (SignKeyKES (KES c))

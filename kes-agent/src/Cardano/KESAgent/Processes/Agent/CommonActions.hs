@@ -371,3 +371,4 @@ pushKey agent tbundle = do
     broadcastUpdate tbundle = do
       agentTrace agent $ AgentPushingKeyUpdate
       atomically $ writeTChan (agentNextKeyChan agent) tbundle
+      agentTrace agent $ AgentDebugTrace "Key update pushed"

@@ -61,12 +61,13 @@ import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Accept (..), Accepted (..), Snocket (..))
 
 import Control.Concurrent.Class.MonadMVar (MonadMVar)
-import Control.Concurrent.Class.MonadSTM (MonadSTM, retry)
+import Control.Concurrent.Class.MonadSTM (MonadSTM)
 import Control.Concurrent.Class.MonadSTM.TChan (
   dupTChan,
   readTChan,
  )
 import Control.Concurrent.Class.MonadSTM.TMVar (
+  newTMVar,
   putTMVar,
   readTMVar,
   takeTMVar,
@@ -96,6 +97,7 @@ import Data.Proxy (Proxy (..))
 import qualified Data.Text as Text
 import Network.TypedProtocol.Core (PeerRole (..))
 import Network.TypedProtocol.Driver (runPeerWithDriver)
+import Debug.Trace (traceM)
 
 runListener ::
   forall m c fd addr st (pr :: PeerRole) t a.
@@ -173,28 +175,40 @@ runAgent ::
   m ()
 runAgent agent = do
   poisonWindows
+
+  clientCounterVar <- atomically $ newTMVar (0 :: Int)
+
   let runEvolution = do
         forever $ do
-          -- Check time every 100 milliseconds, update key when period flips
+          -- Check time every 1000 milliseconds, update key when period flips
           -- over.
-          threadDelay 100_0000
+          threadDelay 1_000_000
           checkEvolution agent
 
-  let runService = do
+  let runDebug = do
+        labelMyThread "debug"
+        nextKeyChanRcv <- atomically $ dupTChan (agentNextKeyChan agent)
+        forever $ do
+          atomically (readTChan nextKeyChanRcv)
+          agentTrace agent $ AgentDebugTrace "Saw a key"
+
+  let runService :: m ()
+      runService = do
         labelMyThread "service"
         nextKeyChanRcv <- atomically $ dupTChan (agentNextKeyChan agent)
 
         let currentKey = do
               agentTrace agent $ AgentDebugTrace "Waiting for initial key"
-              key <- atomically $ readTMVar (agentCurrentKeyVar agent) >>= maybe retry return
+              key <- atomically $ readTMVar (agentCurrentKeyVar agent)
               agentTrace agent $ AgentDebugTrace "Got initial key"
               return key
 
         let nextKey = do
               agentTrace agent $ AgentDebugTrace "Waiting for next key"
-              atomically (readTChan nextKeyChanRcv) <* agentTrace agent AgentHandlingKeyUpdate
+              atomically (readTChan nextKeyChanRcv) <* agentTrace agent (AgentDebugTrace "Got next key")
 
-        let reportPushResult = const (return ())
+        let reportPushResult result =
+              agentTrace agent $ AgentDebugTrace $ "Push result: " ++ show result
 
         runListener
           (agentSnocket agent)
@@ -209,6 +223,11 @@ runAgent agent = do
           AgentServiceSocketError
           AgentServiceDriverTrace
           ( \bearer tracer' -> do
+              serviceID <- atomically $ do
+                i <- takeTMVar clientCounterVar
+                putTMVar clientCounterVar (succ i)
+                return i
+              labelMyThread $ "service" ++ show serviceID
               (protocolVersionMay :: Maybe VersionIdentifier, ()) <-
                 runPeerWithDriver
                   ( versionHandshakeDriver
@@ -287,6 +306,11 @@ runAgent agent = do
             AgentControlSocketError
             AgentControlDriverTrace
             ( \bearer tracer' -> do
+                controlID <- atomically $ do
+                  i <- takeTMVar clientCounterVar
+                  putTMVar clientCounterVar (succ i)
+                  return i
+                labelMyThread $ "control" ++ show controlID
                 (protocolVersionMay :: Maybe VersionIdentifier, ()) <-
                   runPeerWithDriver
                     ( versionHandshakeDriver
@@ -306,6 +330,7 @@ runAgent agent = do
       `concurrently` runControl
       `concurrently` runEvolution
       `concurrently` runBootstraps
+      `concurrently` runDebug
 
 labelMyThread label = do
   tid <- myThreadId

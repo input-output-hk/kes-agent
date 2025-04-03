@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -81,6 +82,7 @@ tests =
         , testCase "no key" kesAgentControlInstallNoKey
         , testCase "dropped key" kesAgentControlInstallDroppedKey
         , testCase "multiple nodes" kesAgentControlInstallMultiNodes
+        , testCase "update multiple nodes" kesAgentControlUpdateMultiNodes
         ]
     , testGroup
         "kes-agent-control drop-key"
@@ -89,6 +91,7 @@ tests =
     , testGroup
         "inter-agent"
         [ testCase "key propagated to other agent" kesAgentPropagate
+        , testCase "key update propagated to other agent" kesAgentPropagateUpdate
         , testCase "self-healing 1 (agent 2 goes down)" kesAgentSelfHeal1
         , testCase "self-healing 2 (agent 1 goes down)" kesAgentSelfHeal2
         ]
@@ -330,8 +333,7 @@ kesAgentControlUpdateValid =
           ]
           ExitSuccess
           ["KES key installed."]
-        -- Allow some time for service client to actually receive the key
-        threadDelay 10000
+        threadDelay 100_000
 
         controlClientCheck
           "Key generated"
@@ -359,7 +361,6 @@ kesAgentControlUpdateValid =
           ["KES key installed."]
         -- Allow some time for service client to actually receive the key
         threadDelay 10000
-
     assertMatchingOutputLinesWith
       ("SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
       3
@@ -574,7 +575,7 @@ kesAgentControlDropInstalled =
           ExitSuccess
           (not . any ("Current evolution:" `isPrefixOf`))
         -- Allow some time for service client to actually receive and then drop the key
-        threadDelay 200000
+        threadDelay 100000
 
     -- First, make sure the key got installed
     assertMatchingOutputLinesWith
@@ -633,6 +634,103 @@ kesAgentControlInstallMultiNodes =
             , "KES VerKey written to " <> kesKeyFile
             ]
           makeCert
+          controlClientCheck
+            "Key installed"
+            [ "install-key"
+            , "--opcert-file"
+            , opcertFile
+            , "--control-address"
+            , controlAddr
+            ]
+            ExitSuccess
+            ["KES key installed."]
+          -- Little bit of delay to allow the client to read the key.
+          threadDelay 100000
+        return (serviceOutLines1, serviceOutLines2)
+
+    assertNoMatchingOutputLinesWith
+      ("Service 1: NOT 'KES key 0'\n" ++ (Text.unpack . Text.unlines $ agentOutLines))
+      0
+      ["KES", "key", "0"]
+      serviceOutLines1
+    assertMatchingOutputLinesWith
+      ("Service1: 'ReceivedVersionID'\n" ++ (Text.unpack . Text.unlines $ agentOutLines))
+      4
+      ["ReceivedVersionID"]
+      serviceOutLines1
+    assertMatchingOutputLinesWith
+      ("Service2: 'KES key 0'\n" ++ (Text.unpack . Text.unlines $ agentOutLines))
+      4
+      ["->", "ServiceClientBlockForging", "0"]
+      serviceOutLines2
+
+kesAgentControlUpdateMultiNodes :: Assertion
+kesAgentControlUpdateMultiNodes =
+  withSystemTempDirectory "KesAgentTest" $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+        kesKeyFile = tmpdir </> "kes.vkey"
+        opcertFile = tmpdir </> "opcert.cert"
+    coldSignKeyFile <- getDataFileName "fixtures/cold.skey"
+    coldVerKeyFile <- getDataFileName "fixtures/cold.vkey"
+
+    let makeCert n = do
+          ColdSignKey coldSK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdSignKey (DSIGN StandardCrypto)) coldSignKeyFile
+          ColdVerKey coldVK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdVerKey (DSIGN StandardCrypto)) coldVerKeyFile
+          KESVerKey kesVK <-
+            either error return =<< decodeTextEnvelopeFile @(KESVerKey (KES StandardCrypto)) kesKeyFile
+          kesPeriod <- getCurrentKESPeriod defEvolutionConfig
+          let ocert :: OCert StandardCrypto = makeOCert kesVK n kesPeriod coldSK
+          encodeTextEnvelopeFile opcertFile (OpCert ocert coldVK)
+          return ()
+
+    (agentOutLines, (serviceOutLines1, serviceOutLines2)) <-
+      withAgent controlAddr serviceAddr [] coldVerKeyFile [] $ do
+        (serviceOutLines1, ()) <- withService serviceAddr $ do
+          -- Little bit of delay here to allow for the version handshake to
+          -- finish
+          threadDelay 10000
+          return ()
+        (serviceOutLines2, ()) <- withService serviceAddr $ do
+          controlClientCheck
+            "Key generated"
+            [ "gen-staged-key"
+            , "--kes-verification-key-file"
+            , kesKeyFile
+            , "--control-address"
+            , controlAddr
+            ]
+            ExitSuccess
+            [ "Asking agent to generate a key..."
+            , "KES SignKey generated."
+            , "KES VerKey written to " <> kesKeyFile
+            ]
+          makeCert 0
+          controlClientCheck
+            "Key installed"
+            [ "install-key"
+            , "--opcert-file"
+            , opcertFile
+            , "--control-address"
+            , controlAddr
+            ]
+            ExitSuccess
+            ["KES key installed."]
+          controlClientCheck
+            "Key generated"
+            [ "gen-staged-key"
+            , "--kes-verification-key-file"
+            , kesKeyFile
+            , "--control-address"
+            , controlAddr
+            ]
+            ExitSuccess
+            [ "Asking agent to generate a key..."
+            , "KES SignKey generated."
+            , "KES VerKey written to " <> kesKeyFile
+            ]
+          makeCert 1
           controlClientCheck
             "Key installed"
             [ "install-key"
@@ -881,6 +979,110 @@ kesAgentPropagate =
       ["->", "ServiceClientBlockForging", "0"]
       serviceOutLines
 
+kesAgentPropagateUpdate :: Assertion
+kesAgentPropagateUpdate =
+  withSystemTempDirectory "KesAgentTest" $ \tmpdir -> do
+    let controlAddr1 = tmpdir </> "control1.socket"
+        serviceAddr1 = tmpdir </> "service1.socket"
+        controlAddr2 = tmpdir </> "control2.socket"
+        serviceAddr2 = tmpdir </> "service2.socket"
+        kesKeyFile = tmpdir </> "kes.vkey"
+        opcertFile = tmpdir </> "opcert.cert"
+    coldSignKeyFile <- getDataFileName "fixtures/cold.skey"
+    coldVerKeyFile <- getDataFileName "fixtures/cold.vkey"
+    currentKesPeriod <- getCurrentKESPeriod defEvolutionConfig
+
+    let makeCert n = do
+          ColdSignKey coldSK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdSignKey (DSIGN StandardCrypto)) coldSignKeyFile
+          ColdVerKey coldVK <-
+            either error return =<< decodeTextEnvelopeFile @(ColdVerKey (DSIGN StandardCrypto)) coldVerKeyFile
+          KESVerKey kesVK <-
+            either error return =<< decodeTextEnvelopeFile @(KESVerKey (KES StandardCrypto)) kesKeyFile
+          let kesPeriod = KESPeriod $ unKESPeriod currentKesPeriod
+          let ocert :: OCert StandardCrypto = makeOCert kesVK n kesPeriod coldSK
+          encodeTextEnvelopeFile opcertFile (OpCert ocert coldVK)
+          return ()
+
+    (agentOutLines1, (agentOutLines2, serviceOutLines, ())) <-
+      withAgent controlAddr1 serviceAddr1 [serviceAddr2] coldVerKeyFile [] $ do
+        withAgentAndService controlAddr2 serviceAddr2 [serviceAddr1] coldVerKeyFile [] $ do
+          controlClientCheck
+            "Key generated"
+            [ "gen-staged-key"
+            , "--kes-verification-key-file"
+            , kesKeyFile
+            , "--control-address"
+            , controlAddr1
+            ]
+            ExitSuccess
+            [ "Asking agent to generate a key..."
+            , "KES SignKey generated."
+            , "KES VerKey written to " <> kesKeyFile
+            ]
+          makeCert 0
+          controlClientCheck
+            "Key installed"
+            [ "install-key"
+            , "--opcert-file"
+            , opcertFile
+            , "--control-address"
+            , controlAddr1
+            ]
+            ExitSuccess
+            ["KES key installed."]
+          controlClientCheckP
+            "Evolution check"
+            [ "info"
+            , "--control-address"
+            , controlAddr2
+            ]
+            ExitSuccess
+            (any (`elem` ["Current evolution: 0 / 64", "Current evolution: 1 / 64"]))
+
+          threadDelay 100000
+
+          controlClientCheck
+            "Key generated"
+            [ "gen-staged-key"
+            , "--kes-verification-key-file"
+            , kesKeyFile
+            , "--control-address"
+            , controlAddr1
+            ]
+            ExitSuccess
+            [ "Asking agent to generate a key..."
+            , "KES SignKey generated."
+            , "KES VerKey written to " <> kesKeyFile
+            ]
+          makeCert 1
+          controlClientCheck
+            "Key installed"
+            [ "install-key"
+            , "--opcert-file"
+            , opcertFile
+            , "--control-address"
+            , controlAddr1
+            ]
+            ExitSuccess
+            ["KES key installed."]
+          controlClientCheckP
+            "Evolution check"
+            [ "info"
+            , "--control-address"
+            , controlAddr2
+            ]
+            ExitSuccess
+            (any (`elem` ["Current evolution: 0 / 64", "Current evolution: 1 / 64"]))
+
+          threadDelay 100000
+    assertMatchingOutputLinesWith
+      ("SERVICE OUTPUT CHECK\n" <> (Text.unpack . Text.unlines $ agentOutLines1))
+      4
+      ["->", "ServiceClientBlockForging", "1"]
+      serviceOutLines
+
+
 kesAgentSelfHeal1 :: Assertion
 kesAgentSelfHeal1 =
   withSystemTempDirectory "KesAgentTest" $ \tmpdir -> do
@@ -909,7 +1111,7 @@ kesAgentSelfHeal1 =
     (agentOutLines1, (agentOutLines2, ())) <-
       withAgent controlAddr1 serviceAddr1 [serviceAddr2] coldVerKeyFile [] $ do
         (agentOutLines2a, ()) <- withAgent controlAddr2 serviceAddr2 [serviceAddr1] coldVerKeyFile [] $ do
-          threadDelay 1000000
+          threadDelay 100000
           controlClientCheck
             "Key generated"
             [ "gen-staged-key"
@@ -951,7 +1153,7 @@ kesAgentSelfHeal1 =
           (ExitFailure 1)
           (any ("kes-agent-control: Network.Socket.connect: " `isPrefixOf`))
         (agentOutLines2b, ()) <- withAgent controlAddr2 serviceAddr2 [serviceAddr1] coldVerKeyFile [] $ do
-          threadDelay 1000000
+          threadDelay 100000
           controlClientCheckP
             "Evolution check"
             [ "info"
@@ -995,7 +1197,7 @@ kesAgentSelfHeal2 =
     (agentOutLines1, (agentOutLines2, ())) <-
       withAgent controlAddr1 serviceAddr1 [serviceAddr2] coldVerKeyFile [] $ do
         (agentOutLines2a, ()) <- withAgent controlAddr2 serviceAddr2 [serviceAddr1] coldVerKeyFile [] $ do
-          threadDelay 1000000
+          threadDelay 100000
           controlClientCheck
             "Key generated"
             [ "gen-staged-key"
@@ -1096,7 +1298,7 @@ controlClient args =
 controlClientCheck :: String -> [String] -> ExitCode -> [String] -> IO ()
 controlClientCheck label args expectedExitCode expectedOutput = do
   (exitCode, outStr, errStr) <- controlClient args
-  let outLines = lines outStr ++ lines errStr
+  let outLines = filter (not . ("RECV" `isPrefixOf`)) $ lines outStr ++ lines errStr
   let cmd = show args
   assertEqual
     (label ++ "\n" ++ cmd ++ "\nCONTROL CLIENT OUTPUT\n" ++ outStr ++ errStr)
@@ -1148,7 +1350,7 @@ withAgent controlAddr serviceAddr bootstrapAddrs coldVerKeyFile extraAgentArgs a
       errT <- Text.lines <$> Text.hGetContents hErr
       case result of
         Right retval ->
-          return (outT, retval)
+          return (outT <> ["-----"] <> errT, retval)
         Left (HUnitFailure srcLocMay msg) -> do
           let msg' =
                 ( Text.unpack . Text.unlines $

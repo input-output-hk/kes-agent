@@ -48,7 +48,7 @@ data ServiceDriver m c =
 type ServiceDriverRun m c =
            RawBearer m
         -> Tracer m ServiceDriverTrace
-        -> m (TaggedBundle m c)
+        -> m (Maybe (TaggedBundle m c))
         -> m (TaggedBundle m c)
         -> (RecvResult -> m ())
         -> m ()
@@ -69,13 +69,12 @@ class ServiceCrypto c where
     forall m.
     AgentContext m c => [ ServiceDriver m c ]
 
-wrapCurrentKey :: MonadAgent m => m (TaggedBundle m c) -> m (Bundle m c)
-wrapCurrentKey currentKey = go
-  where
-    go = do
-        currentKey >>= \case
-          TaggedBundle { taggedBundle = Nothing } -> go
-          TaggedBundle { taggedBundle = (Just bundle) } -> return bundle
+wrapCurrentKey :: MonadAgent m => m (Maybe (TaggedBundle m c)) -> m (Maybe (Bundle m c))
+wrapCurrentKey currentKey = do
+  currentKey >>= \case
+    Nothing -> return Nothing
+    Just TaggedBundle { taggedBundle = Nothing } -> return Nothing
+    Just TaggedBundle { taggedBundle = (Just bundle) } -> return (Just bundle)
 
 wrapNextKey :: MonadAgent m => m (TaggedBundle m c) -> m (Maybe (Bundle m c))
 wrapNextKey currentKey = go
