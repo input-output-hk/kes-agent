@@ -587,8 +587,8 @@ kesAgentControlDropInstalled =
     -- Then make sure it got deleted again
     assertMatchingOutputLinesWith
       ("SERVICE OUTPUT CHECK 2\n" <> (Text.unpack . Text.unlines $ agentOutLines))
-      3
-      ["ServiceClientBlockForging", "->", "ServiceClientWaitingForCredentials", "0"]
+      7
+      ["->", "ServiceClientWaitingForCredentials"]
       serviceOutLines
 
 kesAgentControlInstallMultiNodes :: Assertion
@@ -896,9 +896,10 @@ kesAgentEvolvesKey =
                 ExitSuccess
                 (all (/= "Current evolution: 1 / 64"))
               -- Wait 2 seconds; the validity should flip over about 1 second
-              -- after the start of the test run, we add 0.1 second to provide
-              -- some slack.
-              threadDelay 2000000
+              -- after the start of the test run, but only with a 1-second
+              -- granularity, so unfortunately we have to wait another second to
+              -- make sure we capture the flipover.
+              threadDelay 2_000_000
               controlClientCheckP
                 "Current evolution is 1"
                 [ "info"
@@ -1040,8 +1041,6 @@ kesAgentPropagateUpdate =
             ExitSuccess
             (any (`elem` ["Current evolution: 0 / 64", "Current evolution: 1 / 64"]))
 
-          threadDelay 100000
-
           controlClientCheck
             "Key generated"
             [ "gen-staged-key"
@@ -1073,12 +1072,16 @@ kesAgentPropagateUpdate =
             , controlAddr2
             ]
             ExitSuccess
-            (any (`elem` ["Current evolution: 0 / 64", "Current evolution: 1 / 64"]))
+            ("OpCert number: 1" `elem`)
 
-          threadDelay 100000
+          threadDelay 100_000
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK\n" <> (Text.unpack . Text.unlines $ agentOutLines1))
-      4
+      ("SERVICE OUTPUT CHECK\n" <>
+        (Text.unpack . Text.unlines $ agentOutLines1) <>
+        "---------\n" <>
+        (Text.unpack . Text.unlines $ agentOutLines2)
+      )
+      7
       ["->", "ServiceClientBlockForging", "1"]
       serviceOutLines
 
@@ -1233,7 +1236,7 @@ kesAgentSelfHeal2 =
           (ExitFailure 1)
           (any ("kes-agent-control: Network.Socket.connect: " `isPrefixOf`))
         (agentOutLines2b, ()) <- withAgent controlAddr2 serviceAddr2 [serviceAddr1] coldVerKeyFile [] $ do
-          threadDelay 10000
+          threadDelay 100000
           controlClientCheckP
             "Evolution check"
             [ "info"

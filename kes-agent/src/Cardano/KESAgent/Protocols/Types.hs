@@ -98,10 +98,10 @@ data ServiceDriverTrace
   | ServiceDriverReceivingVersionID
   | ServiceDriverReceivedVersionID !VersionIdentifier
   | ServiceDriverInvalidVersion !VersionIdentifier !VersionIdentifier
-  | ServiceDriverSendingKey !Word64
-  | ServiceDriverSentKey !Word64
+  | ServiceDriverSendingKey !Word64 !Word64
+  | ServiceDriverSentKey !Word64 !Word64
   | ServiceDriverReceivingKey
-  | ServiceDriverReceivedKey !Word64
+  | ServiceDriverReceivedKey !Word64 !Word64
   | ServiceDriverConfirmingKey
   | ServiceDriverConfirmedKey
   | ServiceDriverDecliningKey !RecvResult

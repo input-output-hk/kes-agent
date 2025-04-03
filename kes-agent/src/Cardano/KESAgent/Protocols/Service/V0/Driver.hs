@@ -88,9 +88,9 @@ serviceDriver s tracer =
       (SInitialState, AbortMessage) -> do
         return ()
       (SIdleState, KeyMessage bundle) -> do
-        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle))
+        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle)) 0
         sendItem s bundle
-        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle))
+        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle)) 0
       (SIdleState, ServerDisconnectMessage) -> do
         return ()
       (_, ProtocolErrorMessage) -> do
@@ -127,7 +127,7 @@ serviceDriver s tracer =
         result <- runReadResultT $ do
           lift $ traceWith tracer ServiceDriverReceivingKey
           bundle <- receiveItem s
-          lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle))
+          lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle)) 0
           return (SomeMessage (KeyMessage bundle), ())
         case result of
           ReadOK msg ->

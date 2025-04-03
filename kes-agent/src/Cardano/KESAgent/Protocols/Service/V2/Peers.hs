@@ -24,7 +24,6 @@ import Data.Kind (Type)
 import Network.TypedProtocol.Core
 import Network.TypedProtocol.Peer.Client as Client
 import Network.TypedProtocol.Peer.Server as Server
-import Debug.Trace
 
 serviceReceiver ::
   forall (m :: Type -> Type).
@@ -39,25 +38,19 @@ serviceReceiver receiveBundle =
     ProtocolErrorMessage -> Client.Done ()
   where
     go :: Client (ServiceProtocol m) NonPipelined IdleState m ()
-    go = Client.Effect $ do
-            threadDelay 100000
-            return $ Client.Await $ \case
-              KeyMessage bundle timestamp ->
-                Client.Effect $ do
-                  traceM "DDDDDD"
-                  result <- receiveBundle (TaggedBundle (Just bundle) timestamp)
-                  traceM $ "EEEEEE " ++ show result
-                  return $ Client.Yield (RecvResultMessage result) go
-              DropKeyMessage timestamp ->
-                Client.Effect $ do
-                  result <- receiveBundle (TaggedBundle Nothing timestamp)
-                  return $ Client.Yield (RecvResultMessage result) go
-              ProtocolErrorMessage ->
-                trace "ProtocolError" $
-                Client.Done ()
-              ServerDisconnectMessage ->
-                trace "ServerDisconnect" $
-                Client.Done ()
+    go = Client.Await $ \case
+            KeyMessage bundle timestamp ->
+              Client.Effect $ do
+                result <- receiveBundle (TaggedBundle (Just bundle) timestamp)
+                return $ Client.Yield (RecvResultMessage result) go
+            DropKeyMessage timestamp ->
+              Client.Effect $ do
+                result <- receiveBundle (TaggedBundle Nothing timestamp)
+                return $ Client.Yield (RecvResultMessage result) go
+            ProtocolErrorMessage ->
+              Client.Done ()
+            ServerDisconnectMessage ->
+              Client.Done ()
 
 servicePusher ::
   forall (m :: (Type -> Type)).
@@ -65,29 +58,26 @@ servicePusher ::
   MonadThrow m =>
   MonadAsync m =>
   MonadTimer m =>
-  m (Maybe (TaggedBundle m StandardCrypto)) ->
+  m (TaggedBundle m StandardCrypto) ->
   m (TaggedBundle m StandardCrypto) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m) NonPipelined InitialState m ()
 servicePusher currentKey nextKey handleResult =
   Server.Yield VersionMessage $
     Server.Effect $ do
-      currentKey >>= maybe go goKey
+      currentKey >>= goKey
   where
     goKey :: TaggedBundle m StandardCrypto
           -> m (Server (ServiceProtocol m) NonPipelined IdleState m ())
     goKey (TaggedBundle bundleMay timestamp) = do
-      traceM "AAAAAA"
       return $
         Server.Yield ((maybe DropKeyMessage KeyMessage bundleMay) timestamp) $
           Server.Effect $ do
-            traceM "BBBBBB"
             return $ Server.Await $
               \(RecvResultMessage result) -> goR result
 
     goR :: RecvResult -> Server (ServiceProtocol m) NonPipelined IdleState m ()
     goR result = Server.Effect $ do
-      traceM "CCCCCC"
       handleResult result
       go
 

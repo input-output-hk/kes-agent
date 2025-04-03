@@ -35,7 +35,6 @@ import Cardano.Crypto.KES.Class
 
 import Ouroboros.Network.RawBearer
 
-import Debug.Trace (traceM)
 import Control.Concurrent.Class.MonadMVar
 import Control.Concurrent.Class.MonadSTM
 import Control.Monad.Class.MonadST
@@ -99,11 +98,11 @@ serviceDriver s tracer =
       (SInitialState, AbortMessage) -> do
         return ()
       (SIdleState, KeyMessage bundle timestamp) -> do
-        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle))
+        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
         sendItem s KeyMessageID
         sendItem s timestamp
         sendItem s bundle
-        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle))
+        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
       (SIdleState, DropKeyMessage timestamp) -> do
         traceWith tracer $ ServiceDriverRequestingKeyDrop
         sendItem s DropKeyMessageID
@@ -144,15 +143,13 @@ serviceDriver s tracer =
             return (SomeMessage AbortMessage, ())
       SIdleState -> do
         result <- runReadResultT $ do
-          traceM "RECV key message ID"
           what <- receiveItem s
-          traceM $ "RECV: " ++ show what
           case what of
             KeyMessageID -> do
               lift $ traceWith tracer ServiceDriverReceivingKey
               timestamp <- receiveItem s
               bundle <- receiveItem s
-              lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle))
+              lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
               return (SomeMessage (KeyMessage bundle timestamp), ())
             DropKeyMessageID -> do
               lift $ traceWith tracer ServiceDriverDroppingKey
@@ -167,9 +164,7 @@ serviceDriver s tracer =
             traceWith tracer $ readErrorToServiceDriverTrace err
             return (SomeMessage ProtocolErrorMessage, ())
       SWaitForConfirmationState -> do
-        traceM "FFFFFF"
         result <- receiveRecvResult s
-        traceM $ "GGGGGG " <> show result
         case result of
           ReadOK response -> do
             case response of

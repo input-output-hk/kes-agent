@@ -22,13 +22,10 @@ import Cardano.Crypto.Libsodium (sodiumInit)
 import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket
 
-import Debug.Trace (traceM)
 import Control.Concurrent.Class.MonadMVar
-import Control.Concurrent.Class.MonadSTM (atomically)
-import Control.Concurrent.Class.MonadSTM.TChan
 import Control.Monad (forever, when)
 import Control.Monad.Class.MonadAsync
-import Control.Monad.Class.MonadThrow (SomeException, catch, finally)
+import Control.Monad.Class.MonadThrow (SomeException, catch)
 import Control.Monad.Class.MonadTime (getCurrentTime)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Tracer
@@ -110,17 +107,6 @@ formatServiceTrace msg =
   let prio = serviceTracePrio msg
   in (prio, pretty msg)
 
-tChanTracer :: Priority -> TChan IO String -> Tracer IO (Priority, String)
-tChanTracer maxPrio tc = Tracer $ \(prio, msg) -> do
-  timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
-  when (prio <= maxPrio) $
-    atomically $ writeTChan tc $
-      printf
-        "%15.3f %-8s %s\n"
-        (realToFrac timestamp :: Double)
-        (show prio)
-        msg
-
 stdoutStringTracer :: Priority -> MVar IO () -> Tracer IO (Priority, String)
 stdoutStringTracer maxPrio lock = Tracer $ \(prio, msg) -> do
   timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
@@ -133,31 +119,20 @@ stdoutStringTracer maxPrio lock = Tracer $ \(prio, msg) -> do
         msg
       hFlush stdout
 
-fmtDebugTracer :: Tracer IO (Priority, String)
-fmtDebugTracer = Tracer $ \(prio, msg) -> do
-  timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
-  traceM $
-      printf
-        "%15.3f %-8s %s"
-        (realToFrac timestamp :: Double)
-        (show prio)
-        msg
-
 handleKey ::
   UnsoundKESAlgorithm (KES c) =>
   (ServiceClientState -> IO ()) ->
   TaggedBundle IO c ->
   IO RecvResult
 handleKey setState TaggedBundle { taggedBundle = Just (Bundle skpVar ocert) } = do
-  -- withCRefValue skpVar $ \skp -> do
-  --   skSer <- rawSerialiseSignKeyKES (skWithoutPeriodKES skp)
-  --   let period = periodKES skp
-  --   let certN = ocertN ocert
-  --   setState $ ServiceClientBlockForging certN period (take 8 (hexShowBS skSer) ++ "...")
-  --   return RecvOK
-  return RecvOK
+  withCRefValue skpVar $ \skp -> do
+    skSer <- rawSerialiseSignKeyKES (skWithoutPeriodKES skp)
+    let period = periodKES skp
+    let certN = ocertN ocert
+    setState $ ServiceClientBlockForging certN period (take 8 (hexShowBS skSer) ++ "...")
+    return RecvOK
 handleKey setState TaggedBundle { taggedBundle = Nothing } = do
-  -- setState $ ServiceClientWaitingForCredentials
+  setState $ ServiceClientWaitingForCredentials
   return RecvOK
 
 hexShowBS :: ByteString -> String
@@ -179,13 +154,8 @@ main = do
   let sdo = sdo' <> sdoEnv <> defServiceDemoOptions
 
   let maxPrio = Debug
-  -- logLock <- newMVar ()
-  -- let tracer = stdoutStringTracer maxPrio logLock
-
-  tc <- newTChanIO
-  -- let tracer = tChanTracer maxPrio tc
-  
-  let tracer = fmtDebugTracer
+  logLock <- newMVar ()
+  let tracer = stdoutStringTracer maxPrio logLock
 
   let stateTracer = contramap (\(old, new) -> (Notice, "State: " ++ show old ++ " -> " ++ show new)) tracer
   stateVar <- newMVar ServiceClientNotRunning
@@ -194,28 +164,23 @@ main = do
         putMVar stateVar new
         traceWith stateTracer (old, new)
 
-  let writeTraces = forever $ do
-        atomically (readTChan tc) >>= putStr >> hFlush stdout
-
-  let run = withIOManager $ \ioManager -> do
-        serviceClientOptions <- sdoToServiceClientOptions ioManager sdo
-        forever $ do
-          -- setState ServiceClientWaitingForCredentials
-          traceWith tracer (Notice, "RUN SERVICE CLIENT")
-          runServiceClient
-            (Proxy @StandardCrypto)
-            makeSocketRawBearer
-            serviceClientOptions
-            (handleKey setState)
-            (contramap formatServiceTrace tracer)
-            `catch` ( \(e :: AsyncCancelled) -> do
-                        traceWith tracer (Notice, "SERVICE CLIENT CANCELLED")
-                        return ()
-                    )
-            `catch` ( \(e :: SomeException) ->
-                        traceWith tracer (Notice, show e)
-                    )
-          traceWith tracer (Notice, "SERVICE CLIENT TERMINATED")
-          threadDelay 100000
-
-  race_ writeTraces run `finally` traceM "SERVICE CLIENT EXITS"
+  withIOManager $ \ioManager -> do
+    serviceClientOptions <- sdoToServiceClientOptions ioManager sdo
+    forever $ do
+      setState ServiceClientWaitingForCredentials
+      traceWith tracer (Notice, "RUN SERVICE CLIENT")
+      runServiceClient
+        (Proxy @StandardCrypto)
+        makeSocketRawBearer
+        serviceClientOptions
+        (handleKey setState)
+        (contramap formatServiceTrace tracer)
+        `catch` ( \(e :: AsyncCancelled) -> do
+                    traceWith tracer (Notice, "SERVICE CLIENT CANCELLED")
+                    return ()
+                )
+        `catch` ( \(e :: SomeException) ->
+                    traceWith tracer (Notice, show e)
+                )
+      traceWith tracer (Notice, "SERVICE CLIENT TERMINATED")
+      threadDelay 100000

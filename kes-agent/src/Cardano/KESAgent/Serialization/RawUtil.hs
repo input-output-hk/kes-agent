@@ -47,7 +47,6 @@ import Data.Typeable
 import Data.Word
 import Foreign (Ptr, castPtr, plusPtr)
 import Foreign.C.Types (CChar, CSize)
-import Debug.Trace (traceM)
 import GHC.Conc.Sync (threadLabel, myThreadId)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -118,7 +117,7 @@ checkVersion ::
   Tracer m VersionIdentifier ->
   m (ReadResult ())
 checkVersion p s tracer = runReadResultT $ do
-  v <- VersionIdentifier <$> ReadResultT (receiveBS "versionIdentifierLength" s versionIdentifierLength)
+  v <- VersionIdentifier <$> ReadResultT (receiveBS s versionIdentifierLength)
   lift $ traceWith tracer v
   let expectedV = versionIdentifier p
   if v == expectedV
@@ -165,7 +164,7 @@ receiveSK s tracer = do
     directDeserialise
       ( \buf bufSize -> do
           traceWith tracer ("attempting to read " ++ show bufSize ++ " bytes...")
-          unsafeReceiveN "SK" s buf bufSize >>= \case
+          unsafeReceiveN s buf bufSize >>= \case
             ReadOK n -> do
               traceWith tracer ("read " ++ show n ++ " bytes")
               when (fromIntegral n /= bufSize) (error "BBBBBB")
@@ -199,7 +198,7 @@ receiveSKP s tracer = runReadResultT $ do
   lift $ traceWith tracer "waiting for sign key bytes..."
   sk <- ReadResultT $ receiveSK s tracer
   lift $ traceWith tracer "receiving t..."
-  t <- fromIntegral <$> ReadResultT (receiveWord32 "SK.t" s)
+  t <- fromIntegral <$> ReadResultT (receiveWord32 s)
   lift $
     newCRef
       (forgetSignKeyKES . skWithoutPeriodKES)
@@ -207,15 +206,12 @@ receiveSKP s tracer = runReadResultT $ do
 
 receiveBS ::
   (MonadST m, MonadThrow m) =>
-  String ->
   RawBearer m ->
   Int ->
   m (ReadResult BS.ByteString)
-receiveBS lbl s size =
+receiveBS s size =
   allocaBytes size $ \buf -> runReadResultT $ do
-    traceM $ "RECV BS " ++ show size ++ " <" ++ lbl ++ ">"
-    bytesRead <- ReadResultT $ unsafeReceiveN lbl s buf (fromIntegral size)
-    traceM $ "RECV BS " ++ show bytesRead ++ " OK <" ++ lbl ++ ">"
+    bytesRead <- ReadResultT $ unsafeReceiveN s buf (fromIntegral size)
     if bytesRead /= fromIntegral size
       then
         readResultT $ ReadMalformed $ "ByteString of length " ++ show size
@@ -235,81 +231,73 @@ sendBS s bs =
 
 receiveWord8 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Word8)
-receiveWord8 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 1
+receiveWord8 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 1
   let decoded = decode @Word8 $ LBS.fromStrict buf
   return decoded
 
 receiveWord16 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Word16)
-receiveWord16 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 2
+receiveWord16 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 2
   let decoded = decode @Word16 $ LBS.fromStrict buf
   return decoded
 
 receiveWord32 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Word32)
-receiveWord32 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 4
+receiveWord32 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 4
   let decoded = decode @Word32 $ LBS.fromStrict buf
   return decoded
 
 receiveWord64 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Word64)
-receiveWord64 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 8
+receiveWord64 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 8
   let decoded = decode @Word64 $ LBS.fromStrict buf
   return decoded
 
 receiveInt8 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Int8)
-receiveInt8 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 1
+receiveInt8 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 1
   let decoded = decode @Int8 $ LBS.fromStrict buf
   return decoded
 
 receiveInt16 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Int16)
-receiveInt16 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 2
+receiveInt16 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 2
   let decoded = decode @Int16 $ LBS.fromStrict buf
   return decoded
 
 receiveInt32 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Int32)
-receiveInt32 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 4
+receiveInt32 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 4
   let decoded = decode @Int32 $ LBS.fromStrict buf
   return decoded
 
 receiveInt64 ::
   (MonadThrow m, MonadST m) =>
-  String ->
   RawBearer m ->
   m (ReadResult Int64)
-receiveInt64 lbl s = runReadResultT $ do
-  buf <- ReadResultT $ receiveBS lbl s 8
+receiveInt64 s = runReadResultT $ do
+  buf <- ReadResultT $ receiveBS s 8
   let decoded = decode @Int64 $ LBS.fromStrict buf
   return decoded
 
@@ -390,7 +378,7 @@ receiveUTCTime ::
   RawBearer m ->
   m (ReadResult UTCTime)
 receiveUTCTime s = runReadResultT $ do
-  posix <- ReadResultT $ receiveInt64 "UTCTime" s
+  posix <- ReadResultT $ receiveInt64 s
   return $ posixSecondsToUTCTime . fromIntegral $ posix
 
 sendEnum ::
@@ -417,36 +405,29 @@ receiveEnum ::
   RawBearer m ->
   m (ReadResult a)
 receiveEnum label s = runReadResultT $ do
-  w <- fromIntegral <$> ReadResultT (receiveWord32 label s)
+  w <- fromIntegral <$> ReadResultT (receiveWord32 s)
   if w > fromEnum (maxBound :: a)
     then
       readResultT (ReadMalformed label)
     else
       return $ toEnum w
 
-unsafeReceiveN :: Monad m => String -> RawBearer m -> Ptr CChar -> CSize -> m (ReadResult CSize)
-unsafeReceiveN lbl s buf bufSize = do
-  traceM $ "RECV " ++ show bufSize ++ " <" ++ lbl ++ ">"
+unsafeReceiveN :: Monad m => RawBearer m -> Ptr CChar -> CSize -> m (ReadResult CSize)
+unsafeReceiveN s buf bufSize = do
   n <- recv s (castPtr buf) (fromIntegral bufSize)
-  traceM $ "RECV GOT " ++ show n ++ "/" ++ show bufSize ++ " <" ++ lbl ++ ">"
   if fromIntegral n == bufSize
     then do
-      traceM $ "RECV OK" ++ " <" ++ lbl ++ ">"
       return (ReadOK bufSize)
     else do
       if n == 0
         then do
-          traceM $ "RECV EOF" ++ " <" ++ lbl ++ ">"
           return ReadEOF
         else runReadResultT $ do
-          traceM $ "RECV MORE" ++ " <" ++ lbl ++ ">"
-          n' <- ReadResultT $ unsafeReceiveN lbl s (plusPtr buf (fromIntegral n)) (bufSize - fromIntegral n)
+          n' <- ReadResultT $ unsafeReceiveN s (plusPtr buf (fromIntegral n)) (bufSize - fromIntegral n)
           if n' == 0
             then do
-              traceM $ "RECV MORE EOF" ++ " <" ++ lbl ++ ">"
               readResultT ReadEOF
             else do
-              traceM $ "RECV MORE OK " ++ show bufSize ++ " <" ++ lbl ++ ">"
               return bufSize
 
 sendRecvResult ::
@@ -455,9 +436,7 @@ sendRecvResult ::
   ) =>
   RawBearer m -> RecvResult -> m ()
 sendRecvResult s r = do
-  traceM $ "SEND RecvResult: " ++ show r
   sendWord32 s (encodeRecvResult r)
-  traceM $ "SENT RecvResult"
 
 receiveRecvResult ::
   ( MonadST m
@@ -465,13 +444,9 @@ receiveRecvResult ::
   ) =>
   RawBearer m -> m (ReadResult RecvResult)
 receiveRecvResult s = runReadResultT $ do
-  let lbl = "RecvResult"
-  traceM $ "RECV RecvResult" ++ " <" ++ lbl ++ ">"
   w <- ReadResultT $ do
-          result <- receiveWord32 "RecvResult" s
-          traceM $ "RECV RecvResult: " ++ show result ++ " <" ++ lbl ++ ">"
+          result <- receiveWord32 s
           return result
-  traceM $ "RECV RecvResult OK" ++ " <" ++ lbl ++ ">"
   return $ decodeRecvResult w
 
 encodeRecvResult :: RecvResult -> Word32

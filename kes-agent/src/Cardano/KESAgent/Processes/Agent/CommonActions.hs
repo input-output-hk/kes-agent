@@ -43,7 +43,7 @@ import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Snocket (..))
 import Text.Printf
 
-import Cardano.KESAgent.KES.Bundle (TaggedBundle (..), Bundle (..))
+import Cardano.KESAgent.KES.Bundle (TaggedBundle (..), Bundle (..), Timestamp (..))
 import Cardano.KESAgent.KES.Crypto (Crypto (..))
 import Cardano.KESAgent.KES.Evolution (
   getCurrentKESPeriodWith,
@@ -177,10 +177,10 @@ withStagedKey agent context f = do
     agentTrace agent (AgentLockReleased context)
     return retval
 
-formatKey :: OCert c -> String
-formatKey ocert =
+formatKey :: Timestamp -> OCert c -> String
+formatKey ts ocert =
   let serialNumber = ocertN ocert
-  in printf "%i" serialNumber
+  in printf "%i (%lu)" serialNumber (timestampValue ts)
 
 newAgent ::
   forall c m fd addr.
@@ -231,13 +231,11 @@ finalizeAgent agent = do
 data PushKeyResult c
   = PushKeyOK (Maybe (OCert c))
   | PushKeyInvalidOCert String
-  | PushKeyInvalidSerial
   | PushKeyTooOld
 
 pushKeyResultToRecvResult :: PushKeyResult c -> RecvResult
 pushKeyResultToRecvResult PushKeyOK {} = RecvOK
 pushKeyResultToRecvResult PushKeyInvalidOCert {} = RecvErrorInvalidOpCert
-pushKeyResultToRecvResult PushKeyInvalidSerial = RecvErrorKeyOutdated
 pushKeyResultToRecvResult PushKeyTooOld = RecvErrorKeyOutdated
 
 pushKeyResultOCert :: PushKeyResult c -> Maybe (OCert c)
@@ -341,7 +339,7 @@ pushKey agent tbundle = do
               Nothing ->
                 agentTrace agent $ AgentInstallingKeyDrop
               Just bundle ->
-                agentTrace agent $ AgentInstallingNewKey (formatKey (bundleOC bundle))
+                agentTrace agent $ AgentInstallingNewKey (formatKey (taggedBundleTimestamp tbundle) (bundleOC bundle))
             return (Just tbundle, PushKeyOK Nothing)
           Just oldTBundle -> do
             if isTaggedBundleAgeValid oldTBundle tbundle then do
@@ -349,26 +347,29 @@ pushKey agent tbundle = do
               case (releaseResult, taggedBundle tbundle) of
                 (Nothing, Just bundle) ->
                   agentTrace agent $
-                    AgentInstallingNewKey (formatKey (bundleOC bundle))
+                    AgentInstallingNewKey (formatKey (taggedBundleTimestamp tbundle) (bundleOC bundle))
                 (Nothing, Nothing) ->
                   agentTrace agent $
                     AgentInstallingKeyDrop
                 (Just oldOC, Nothing) ->
                   agentTrace agent $
-                    AgentDroppingKey (formatKey oldOC)
+                    AgentDroppingKey (formatKey (taggedBundleTimestamp tbundle) oldOC)
                 (Just oldOC, Just bundle) ->
                   agentTrace agent $
                     AgentReplacingPreviousKey
-                      (formatKey oldOC)
-                      (formatKey (bundleOC bundle))
+                      (formatKey (taggedBundleTimestamp oldTBundle) oldOC)
+                      (formatKey (taggedBundleTimestamp tbundle) (bundleOC bundle))
               return (Just tbundle, PushKeyOK releaseResult)
             else do
-              _ <- releaseTaggedBundle tbundle
-              agentTrace agent $ AgentRejectingKey "Key is too old"
+              releaseResult <- releaseTaggedBundle tbundle
+              agentTrace agent $ AgentRejectingKey $
+                  "Key is too old: " ++
+                      (show . timestampValue $ taggedBundleTimestamp oldTBundle) ++
+                      " > " ++
+                      (show . timestampValue $ taggedBundleTimestamp tbundle)
               return (Just oldTBundle, PushKeyTooOld)
       
     broadcastUpdate :: TaggedBundle m c -> m ()
     broadcastUpdate tbundle = do
       agentTrace agent $ AgentPushingKeyUpdate
       atomically $ writeTChan (agentNextKeyChan agent) tbundle
-      agentTrace agent $ AgentDebugTrace "Key update pushed"

@@ -46,7 +46,6 @@ import Cardano.KESAgent.Processes.ServiceClient (
   runServiceClientForever,
  )
 import Cardano.KESAgent.Protocols.AgentInfo
-import Cardano.KESAgent.Protocols.BearerUtil
 import Cardano.KESAgent.Processes.Agent.Type
 import Cardano.KESAgent.Processes.Agent.Context
 import Cardano.KESAgent.Processes.Agent.CommonActions
@@ -61,7 +60,7 @@ import Ouroboros.Network.RawBearer
 import Ouroboros.Network.Snocket (Accept (..), Accepted (..), Snocket (..))
 
 import Control.Concurrent.Class.MonadMVar (MonadMVar)
-import Control.Concurrent.Class.MonadSTM (MonadSTM)
+import Control.Concurrent.Class.MonadSTM (MonadSTM, retry)
 import Control.Concurrent.Class.MonadSTM.TChan (
   dupTChan,
   readTChan,
@@ -97,7 +96,6 @@ import Data.Proxy (Proxy (..))
 import qualified Data.Text as Text
 import Network.TypedProtocol.Core (PeerRole (..))
 import Network.TypedProtocol.Driver (runPeerWithDriver)
-import Debug.Trace (traceM)
 
 runListener ::
   forall m c fd addr st (pr :: PeerRole) t a.
@@ -180,32 +178,21 @@ runAgent agent = do
 
   let runEvolution = do
         forever $ do
-          -- Check time every 1000 milliseconds, update key when period flips
+          -- Check time every 100 milliseconds, update key when period flips
           -- over.
-          threadDelay 1_000_000
+          threadDelay 100_000
           checkEvolution agent
-
-  let runDebug = do
-        labelMyThread "debug"
-        nextKeyChanRcv <- atomically $ dupTChan (agentNextKeyChan agent)
-        forever $ do
-          atomically (readTChan nextKeyChanRcv)
-          agentTrace agent $ AgentDebugTrace "Saw a key"
 
   let runService :: m ()
       runService = do
         labelMyThread "service"
         nextKeyChanRcv <- atomically $ dupTChan (agentNextKeyChan agent)
 
-        let currentKey = do
-              agentTrace agent $ AgentDebugTrace "Waiting for initial key"
-              key <- atomically $ readTMVar (agentCurrentKeyVar agent)
-              agentTrace agent $ AgentDebugTrace "Got initial key"
-              return key
+        let currentKey =
+              atomically $ readTMVar (agentCurrentKeyVar agent) >>= maybe retry return
 
-        let nextKey = do
-              agentTrace agent $ AgentDebugTrace "Waiting for next key"
-              atomically (readTChan nextKeyChanRcv) <* agentTrace agent (AgentDebugTrace "Got next key")
+        let nextKey =
+              atomically (readTChan nextKeyChanRcv)
 
         let reportPushResult result =
               agentTrace agent $ AgentDebugTrace $ "Push result: " ++ show result
@@ -330,7 +317,6 @@ runAgent agent = do
       `concurrently` runControl
       `concurrently` runEvolution
       `concurrently` runBootstraps
-      `concurrently` runDebug
 
 labelMyThread label = do
   tid <- myThreadId
