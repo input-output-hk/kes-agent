@@ -21,7 +21,6 @@ where
 
 import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
-import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
@@ -98,16 +97,18 @@ serviceDriver s tracer =
       (SInitialState, AbortMessage) -> do
         return ()
       (SIdleState, KeyMessage bundle timestamp) -> do
-        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
+        traceWith tracer $
+          ServiceDriverSendingKey (mkKeyMutationTrace timestamp (Just bundle))
         sendItem s KeyMessageID
         sendItem s timestamp
         sendItem s bundle
-        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
+        traceWith tracer $
+          ServiceDriverSentKey (mkKeyMutationTrace timestamp (Just bundle))
       (SIdleState, DropKeyMessage timestamp) -> do
-        traceWith tracer $ ServiceDriverRequestingKeyDrop
+        traceWith tracer $ ServiceDriverRequestingKeyDrop timestamp
         sendItem s DropKeyMessageID
         sendItem s timestamp
-        traceWith tracer $ ServiceDriverRequestedKeyDrop
+        traceWith tracer $ ServiceDriverRequestedKeyDrop timestamp
       (SIdleState, ServerDisconnectMessage) -> do
         return ()
       (_, ProtocolErrorMessage) -> do
@@ -119,7 +120,11 @@ serviceDriver s tracer =
           else
             traceWith tracer $ ServiceDriverDecliningKey reason
         sendRecvResult s reason
-        traceWith tracer ServiceDriverConfirmedKey
+        if reason == RecvOK
+          then
+            traceWith tracer ServiceDriverConfirmedKey
+          else
+            traceWith tracer $ ServiceDriverDeclinedKey reason
       (SWaitForConfirmationState, ClientDisconnectMessage) -> do
         return ()
 
@@ -149,11 +154,15 @@ serviceDriver s tracer =
               lift $ traceWith tracer ServiceDriverReceivingKey
               timestamp <- receiveItem s
               bundle <- receiveItem s
-              lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle)) (timestampValue timestamp)
+              lift $ traceWith tracer $
+                ServiceDriverReceivedKey
+                  (mkKeyMutationTrace timestamp (Just bundle))
               return (SomeMessage (KeyMessage bundle timestamp), ())
             DropKeyMessageID -> do
-              lift $ traceWith tracer ServiceDriverDroppingKey
+              lift $ traceWith tracer ServiceDriverReceivingKeyDrop
               timestamp <- receiveItem s
+              lift $ traceWith tracer $
+                ServiceDriverReceivedKeyDrop timestamp
               return (SomeMessage (DropKeyMessage timestamp), ())
         case result of
           ReadOK msg ->
@@ -171,7 +180,7 @@ serviceDriver s tracer =
               RecvOK ->
                 traceWith tracer ServiceDriverConfirmedKey
               err ->
-                traceWith tracer ServiceDriverDeclinedKey
+                traceWith tracer (ServiceDriverDeclinedKey response)
             return (SomeMessage (RecvResultMessage response), ())
           ReadEOF ->
             return (SomeMessage ClientDisconnectMessage, ())

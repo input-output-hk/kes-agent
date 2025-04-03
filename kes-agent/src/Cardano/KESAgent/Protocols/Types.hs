@@ -14,7 +14,12 @@ import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Util.Pretty
 import Cardano.KESAgent.Util.RefCounting
+import Cardano.KESAgent.Util.HexBS
+import Cardano.KESAgent.KES.Bundle
+import Cardano.KESAgent.KES.Crypto (Crypto (..))
+import Cardano.KESAgent.KES.OCert (OCert (..))
 
+import Cardano.Crypto.KES.Class (KESAlgorithm, rawSerialiseVerKeyKES)
 import Data.ByteString (ByteString)
 import Data.Proxy
 import Data.SerDoc.Class (
@@ -26,6 +31,45 @@ import Data.SerDoc.Class (
   encodeEnum,
  )
 import Data.Word
+import Text.Printf
+
+data KeyTrace =
+  KeyTrace
+    { keyIdentSerial :: !Word64
+    , keyIdentVKHex :: !ByteString
+    }
+    deriving (Show)
+
+instance Pretty KeyTrace where
+  pretty (KeyTrace n vk) =
+    printf "#%u:%s..." n (take 10 $ hexShowBS vk)
+
+data KeyMutationTrace =
+  KeyMutationTrace
+    { keyMutationTimestamp :: !Timestamp
+    , keyMutationKey :: !(Maybe KeyTrace)
+    }
+    deriving (Show)
+
+mkKeyMutationTrace :: KESAlgorithm (KES c)
+                   => Timestamp
+                   -> Maybe (Bundle m c)
+                   -> KeyMutationTrace
+mkKeyMutationTrace ts bundle =
+  KeyMutationTrace
+    ts
+    (mkKeyTrace <$> bundle)
+
+mkKeyTrace :: KESAlgorithm (KES c)
+                 => Bundle m c -> KeyTrace
+mkKeyTrace bundle =
+  KeyTrace
+    (ocertN (bundleOC bundle))
+    (rawSerialiseVerKeyKES $ ocertVkHot (bundleOC bundle))
+
+instance Pretty KeyMutationTrace where
+  pretty (KeyMutationTrace ts keyMay) =
+    pretty ts ++ " " ++ maybe "<DROP KEY>" pretty keyMay
 
 -- | Logging messages that the ControlDriver may send
 data ControlDriverTrace
@@ -98,23 +142,22 @@ data ServiceDriverTrace
   | ServiceDriverReceivingVersionID
   | ServiceDriverReceivedVersionID !VersionIdentifier
   | ServiceDriverInvalidVersion !VersionIdentifier !VersionIdentifier
-  | ServiceDriverSendingKey !Word64 !Word64
-  | ServiceDriverSentKey !Word64 !Word64
+  | ServiceDriverSendingKey !KeyMutationTrace
+  | ServiceDriverSentKey !KeyMutationTrace
   | ServiceDriverReceivingKey
-  | ServiceDriverReceivedKey !Word64 !Word64
+  | ServiceDriverReceivedKey !KeyMutationTrace
   | ServiceDriverConfirmingKey
   | ServiceDriverConfirmedKey
   | ServiceDriverDecliningKey !RecvResult
-  | ServiceDriverDeclinedKey
-  | ServiceDriverRequestingKeyDrop
-  | ServiceDriverRequestedKeyDrop
-  | ServiceDriverDroppingKey
+  | ServiceDriverDeclinedKey !RecvResult
+  | ServiceDriverRequestingKeyDrop !Timestamp
+  | ServiceDriverRequestedKeyDrop !Timestamp
+  | ServiceDriverReceivingKeyDrop
+  | ServiceDriverReceivedKeyDrop !Timestamp
   | ServiceDriverConnectionClosed
   | ServiceDriverCRefEvent !CRefEvent
   | ServiceDriverProtocolError !String
   | ServiceDriverMisc String
-  | ServiceDriverPing
-  | ServiceDriverPong
   deriving (Show)
 
 instance Pretty ServiceDriverTrace where

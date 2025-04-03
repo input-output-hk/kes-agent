@@ -28,7 +28,6 @@ import Cardano.Crypto.Libsodium.Memory (
 
 import Ouroboros.Network.RawBearer
 
-import Data.Maybe (fromMaybe)
 import Control.Concurrent.Class.MonadMVar
 import Control.Monad (void, when)
 import Control.Monad.Class.MonadST
@@ -47,8 +46,6 @@ import Data.Typeable
 import Data.Word
 import Foreign (Ptr, castPtr, plusPtr)
 import Foreign.C.Types (CChar, CSize)
-import GHC.Conc.Sync (threadLabel, myThreadId)
-import System.IO.Unsafe (unsafePerformIO)
 
 data ReadResult a
   = ReadOK a

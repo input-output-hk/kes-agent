@@ -23,7 +23,6 @@ where
 
 import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
-import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.Service.V0.Protocol
 import Cardano.KESAgent.Protocols.Types
@@ -88,9 +87,13 @@ serviceDriver s tracer =
       (SInitialState, AbortMessage) -> do
         return ()
       (SIdleState, KeyMessage bundle) -> do
-        traceWith tracer $ ServiceDriverSendingKey (ocertN (bundleOC bundle)) 0
+        traceWith tracer $
+          ServiceDriverSendingKey
+            (mkKeyMutationTrace 0 (Just bundle))
         sendItem s bundle
-        traceWith tracer $ ServiceDriverSentKey (ocertN (bundleOC bundle)) 0
+        traceWith tracer $
+          ServiceDriverSentKey
+            (mkKeyMutationTrace 0 (Just bundle))
       (SIdleState, ServerDisconnectMessage) -> do
         return ()
       (_, ProtocolErrorMessage) -> do
@@ -127,7 +130,9 @@ serviceDriver s tracer =
         result <- runReadResultT $ do
           lift $ traceWith tracer ServiceDriverReceivingKey
           bundle <- receiveItem s
-          lift $ traceWith tracer $ ServiceDriverReceivedKey (ocertN (bundleOC bundle)) 0
+          lift $ traceWith tracer $
+            ServiceDriverReceivedKey
+              (mkKeyMutationTrace 0 (Just bundle))
           return (SomeMessage (KeyMessage bundle), ())
         case result of
           ReadOK msg ->
@@ -145,7 +150,7 @@ serviceDriver s tracer =
               RecvOK ->
                 traceWith tracer ServiceDriverConfirmedKey
               err ->
-                traceWith tracer ServiceDriverDeclinedKey
+                traceWith tracer (ServiceDriverDeclinedKey response)
             return (SomeMessage (RecvResultMessage response), ())
           ReadEOF ->
             return (SomeMessage ClientDisconnectMessage, ())

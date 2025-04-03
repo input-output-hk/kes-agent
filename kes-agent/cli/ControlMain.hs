@@ -18,6 +18,7 @@ import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Serialization.CBOR
 import Cardano.KESAgent.Serialization.TextEnvelope
+import Cardano.KESAgent.Util.HexBS
 
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.KES.Class
@@ -491,9 +492,6 @@ runGetInfo opt' = withIOManager $ \ioManager -> do
       printf "%+30s %s\n" addr (show status)
 
 programDesc = fullDesc
-
-hexShowBS :: BS.ByteString -> String
-hexShowBS = concatMap (printf "%02x") . BS.unpack
 
 main :: IO ()
 main = do
