@@ -48,21 +48,6 @@ let
           })
       ];
 
-      # modules = [
-      #   ({ pkgs, lib, config, ... }: {
-      #     packages.kes-agent.components.library.build-tools =
-      #       lib.mkForce [ pkgs.git ];
-      #     packages.kes-agent.components.tests.kes-agent-tests.postInstall = ''
-      #       wrapProgram $out/bin/kes-agent-tests --set PATH ${
-      #         lib.makeBinPath
-      #         [
-      #           config.hsPkgs.kes-agent.components.exes.kes-agent
-      #           config.hsPkgs.kes-agent.components.exes.kes-agent-control
-      #         ]
-      #       }
-      #     '';
-      #   })
-      # ];
     });
 
   cabalProject = cabalProject'.appendOverlays [ ];
