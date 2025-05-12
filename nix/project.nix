@@ -58,7 +58,7 @@ let
 
     shellArgs = repoRoot.nix.shell;
 
-    # includeMingwW64HydraJobs = false;
+    includeMingwW64HydraJobs = true;
 
     # includeProfiledHydraJobs = false;
 
@@ -68,11 +68,11 @@ let
     #   sphinxToolchain = null;
     # };
 
-    # combinedHaddock = {
-    #   enable = false;
-    #   prologue = "";
-    #   packages = [];
-    # };
+    combinedHaddock = {
+      enable = true;
+      prologue = "";
+      packages = [ ];
+    };
   };
 
 in project
