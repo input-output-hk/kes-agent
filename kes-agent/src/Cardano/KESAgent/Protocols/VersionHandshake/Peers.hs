@@ -19,26 +19,10 @@ versionHandshakeClient ::
   Monad m =>
   [VersionIdentifier] ->
   Client VersionHandshakeProtocol NonPipelined InitialState m (Maybe VersionIdentifier)
-versionHandshakeClient acceptableVersions =
-  Client.Await $ \case
-    VersionOfferMessage availableVersions ->
-      let commonVersions = [v | v <- acceptableVersions, w <- availableVersions, v == w]
-      in case commonVersions of
-          [] ->
-            Client.Yield VersionRejectedMessage $
-              Client.Done Nothing
-          (v : _) ->
-            Client.Yield (VersionAcceptMessage v) $
-              Client.Done (Just v)
+versionHandshakeClient = undefined
 
 versionHandshakeServer ::
   Monad m =>
   [VersionIdentifier] ->
   Server VersionHandshakeProtocol NonPipelined InitialState m (Maybe VersionIdentifier)
-versionHandshakeServer availableVersions =
-  Server.Yield (VersionOfferMessage availableVersions) $
-    Server.Await $ \case
-      VersionRejectedMessage ->
-        Server.Done Nothing
-      VersionAcceptMessage v ->
-        Server.Done (Just v)
+versionHandshakeServer = undefined
