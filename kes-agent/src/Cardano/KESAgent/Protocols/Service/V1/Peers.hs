@@ -31,22 +31,7 @@ serviceReceiver ::
   Monad m =>
   (Bundle m StandardCrypto -> m RecvResult) ->
   Client (ServiceProtocol m) NonPipelined InitialState m ()
-serviceReceiver receiveBundle =
-  Client.Await $ \case
-    VersionMessage -> go
-    AbortMessage -> Client.Done ()
-    ProtocolErrorMessage -> Client.Done ()
-  where
-    go :: Client (ServiceProtocol m) NonPipelined IdleState m ()
-    go = Client.Await $ \case
-      KeyMessage bundle ->
-        Client.Effect $ do
-          result <- receiveBundle bundle
-          return $ Client.Yield (RecvResultMessage result) go
-      ProtocolErrorMessage ->
-        Client.Done ()
-      ServerDisconnectMessage ->
-        Client.Done ()
+serviceReceiver = undefined
 
 servicePusher ::
   forall (m :: (Type -> Type)).
@@ -58,32 +43,4 @@ servicePusher ::
   m (Maybe (Bundle m StandardCrypto)) ->
   (RecvResult -> m ()) ->
   Server (ServiceProtocol m) NonPipelined InitialState m ()
-servicePusher currentKey nextKey handleResult =
-  Server.Yield VersionMessage $
-    Server.Effect $ do
-      currentKey >>= \case
-        Nothing ->
-          go
-        Just bundle ->
-          return $
-            Server.Yield (KeyMessage bundle) $
-              Server.Await $
-                \(RecvResultMessage result) -> goR result
-  where
-    goR :: RecvResult -> Server (ServiceProtocol m) NonPipelined IdleState m ()
-    goR result = Server.Effect $ do
-      handleResult result
-      go
-
-    go :: m (Server (ServiceProtocol m) NonPipelined IdleState m ())
-    go = do
-      bundleMay <- nextKey
-      case bundleMay of
-        Nothing ->
-          return $
-            goR RecvErrorUnsupportedOperation
-        Just bundle ->
-          return $
-            Server.Yield (KeyMessage bundle) $
-              Server.Await $
-                \(RecvResultMessage result) -> goR result
+servicePusher = undefined

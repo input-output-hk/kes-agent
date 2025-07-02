@@ -68,7 +68,7 @@ instance StateTokenI VersionsOfferedState where stateToken = SVersionsOfferedSta
 instance StateTokenI EndState where stateToken = SEndState
 
 instance VersionedProtocol VersionHandshakeProtocol where
-  versionIdentifier _ = vpVersionIdentifier
+  versionIdentifier = undefined
 
 vpVersionIdentifier :: VersionIdentifier
-vpVersionIdentifier = mkVersionIdentifier $ "VersionHandshake:0.1"
+vpVersionIdentifier = undefined
