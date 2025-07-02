@@ -19,9 +19,7 @@
 module Cardano.KESAgent.Protocols.Service.V2.Driver
 where
 
-import Cardano.KESAgent.KES.Bundle
 import Cardano.KESAgent.KES.Crypto
-import Cardano.KESAgent.Protocols.RecvResult
 import Cardano.KESAgent.Protocols.Service.V2.Protocol
 import Cardano.KESAgent.Protocols.StandardCrypto
 import Cardano.KESAgent.Protocols.Types
@@ -38,21 +36,11 @@ import Control.Concurrent.Class.MonadMVar
 import Control.Concurrent.Class.MonadSTM
 import Control.Monad.Class.MonadST
 import Control.Monad.Class.MonadThrow (MonadThrow)
-import Control.Monad.Trans (lift)
-import Control.Tracer (Tracer, traceWith)
-import Data.Functor.Contravariant ((>$<))
-import Data.Proxy
+import Control.Tracer (Tracer)
 import Data.SerDoc.Class (
   HasInfo (..),
   Serializable (..),
-  decodeEnum,
-  encodeEnum,
  )
-import Data.SerDoc.Info (aliasField, annField)
-import Data.Text qualified as Text
-import Data.Text.Encoding (decodeUtf8)
-import Data.Word
-import Network.TypedProtocol.Core
 import Network.TypedProtocol.Driver
 
 data KeyMessageTypeID
@@ -61,8 +49,8 @@ data KeyMessageTypeID
   deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 instance (MonadThrow m, MonadST m) => Serializable (DirectCodec m) KeyMessageTypeID where
-  encode p = encodeEnum p (Proxy @Word8)
-  decode p = decodeEnum p (Proxy @Word8)
+  encode = undefined
+  decode = undefined
 
 serviceDriver ::
   forall m f t p pr.
@@ -77,168 +65,24 @@ serviceDriver ::
   RawBearer m ->
   Tracer m ServiceDriverTrace ->
   Driver (ServiceProtocol m) pr () m
-serviceDriver s tracer =
-  Driver {sendMessage, recvMessage, initialDState = ()}
-  where
-    sendMessage ::
-      forall (st :: ServiceProtocol m) (st' :: ServiceProtocol m).
-      ( StateTokenI st
-      , ActiveState st
-      ) =>
-      ReflRelativeAgency (StateAgency st) WeHaveAgency (Relative pr (StateAgency st)) ->
-      Message (ServiceProtocol m) st st' ->
-      m ()
-    sendMessage = \_ msg -> case (stateToken @st, msg) of
-      (SInitialState, VersionMessage) -> do
-        let VersionIdentifier v = versionIdentifier (Proxy @(ServiceProtocol m))
-        sendVersion (Proxy @(ServiceProtocol m)) s (ServiceDriverSendingVersionID >$< tracer)
-      (SInitialState, AbortMessage) -> do
-        return ()
-      (SIdleState, KeyMessage bundle timestamp) -> do
-        traceWith tracer $
-          ServiceDriverSendingKey (mkTaggedBundleTrace timestamp (Just bundle))
-        sendItem s KeyMessageID
-        sendItem s timestamp
-        sendItem s bundle
-        traceWith tracer $
-          ServiceDriverSentKey (mkTaggedBundleTrace timestamp (Just bundle))
-      (SIdleState, DropKeyMessage timestamp) -> do
-        traceWith tracer $ ServiceDriverRequestingKeyDrop timestamp
-        sendItem s DropKeyMessageID
-        sendItem s timestamp
-        traceWith tracer $ ServiceDriverRequestedKeyDrop timestamp
-      (SIdleState, ServerDisconnectMessage) -> do
-        return ()
-      (_, ProtocolErrorMessage) -> do
-        return ()
-      (SWaitForConfirmationState, RecvResultMessage reason) -> do
-        if reason == RecvOK
-          then
-            traceWith tracer ServiceDriverConfirmingKey
-          else
-            traceWith tracer $ ServiceDriverDecliningKey reason
-        sendRecvResult s reason
-        if reason == RecvOK
-          then
-            traceWith tracer ServiceDriverConfirmedKey
-          else
-            traceWith tracer $ ServiceDriverDeclinedKey reason
-      (SWaitForConfirmationState, ClientDisconnectMessage) -> do
-        return ()
-
-    recvMessage ::
-      forall (st :: ServiceProtocol m).
-      ( StateTokenI st
-      , ActiveState st
-      ) =>
-      ReflRelativeAgency (StateAgency st) TheyHaveAgency (Relative pr (StateAgency st)) ->
-      () ->
-      m (SomeMessage st, ())
-    recvMessage = \agency () -> case stateToken @st of
-      SInitialState -> do
-        traceWith tracer ServiceDriverReceivingVersionID
-        result <- checkVersion (Proxy @(ServiceProtocol m)) s (ServiceDriverReceivedVersionID >$< tracer)
-        case result of
-          ReadOK _ ->
-            return (SomeMessage VersionMessage, ())
-          err -> do
-            traceWith tracer $ readErrorToServiceDriverTrace err
-            return (SomeMessage AbortMessage, ())
-      SIdleState -> do
-        result <- runReadResultT $ do
-          what <- receiveItem s
-          case what of
-            KeyMessageID -> do
-              lift $ traceWith tracer ServiceDriverReceivingKey
-              timestamp <- receiveItem s
-              bundle <- receiveItem s
-              lift $
-                traceWith tracer $
-                  ServiceDriverReceivedKey
-                    (mkTaggedBundleTrace timestamp (Just bundle))
-              return (SomeMessage (KeyMessage bundle timestamp), ())
-            DropKeyMessageID -> do
-              lift $ traceWith tracer ServiceDriverReceivingKeyDrop
-              timestamp <- receiveItem s
-              lift $
-                traceWith tracer $
-                  ServiceDriverReceivedKeyDrop timestamp
-              return (SomeMessage (DropKeyMessage timestamp), ())
-        case result of
-          ReadOK msg ->
-            return msg
-          ReadEOF ->
-            return (SomeMessage ServerDisconnectMessage, ())
-          err -> do
-            traceWith tracer $ readErrorToServiceDriverTrace err
-            return (SomeMessage ProtocolErrorMessage, ())
-      SWaitForConfirmationState -> do
-        result <- receiveRecvResult s
-        case result of
-          ReadOK response -> do
-            case response of
-              RecvOK ->
-                traceWith tracer ServiceDriverConfirmedKey
-              err ->
-                traceWith tracer (ServiceDriverDeclinedKey response)
-            return (SomeMessage (RecvResultMessage response), ())
-          ReadEOF ->
-            return (SomeMessage ClientDisconnectMessage, ())
-          err -> do
-            traceWith tracer $ readErrorToServiceDriverTrace err
-            return (SomeMessage ProtocolErrorMessage, ())
-      SEndState -> error "This cannot happen"
+serviceDriver = undefined
 
 readErrorToServiceDriverTrace :: ReadResult a -> ServiceDriverTrace
-readErrorToServiceDriverTrace (ReadOK _) =
-  ServiceDriverMisc "This should not happen"
-readErrorToServiceDriverTrace ReadEOF =
-  ServiceDriverConnectionClosed
-readErrorToServiceDriverTrace (ReadMalformed what) =
-  ServiceDriverProtocolError what
-readErrorToServiceDriverTrace (ReadVersionMismatch expected actual) =
-  ServiceDriverInvalidVersion expected actual
+readErrorToServiceDriverTrace = undefined
 
 instance HasInfo (DirectCodec m) (Message (ServiceProtocol m) InitialState IdleState) where
-  info codec _ =
-    aliasField
-      ( "Message<"
-          ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ versionIdentifier (Proxy @(ServiceProtocol m)))
-          ++ ",InitialState,IdleState"
-          ++ ">"
-      )
-      (info codec (Proxy @VersionIdentifier))
+  info = undefined
+
 instance
   ( HasInfo (DirectCodec m) (SignKeyKES (KES StandardCrypto))
   , HasInfo (DirectCodec m) (VerKeyKES (KES StandardCrypto))
   ) =>
   HasInfo (DirectCodec m) (Message (ServiceProtocol m) IdleState WaitForConfirmationState)
   where
-  info codec _ =
-    aliasField
-      ( "Message<"
-          ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ versionIdentifier (Proxy @(ServiceProtocol m)))
-          ++ ",IdleState,WaitForConfirmationState"
-          ++ ">"
-      )
-      (info codec (Proxy @(Bundle m StandardCrypto)))
+  info = undefined
+
 instance HasInfo (DirectCodec m) (Message (ServiceProtocol m) WaitForConfirmationState IdleState) where
-  info codec _ =
-    aliasField
-      ( "Message<"
-          ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ versionIdentifier (Proxy @(ServiceProtocol m)))
-          ++ ",WaitForConfirmationState,IdleState"
-          ++ ">"
-      )
-      (info codec (Proxy @RecvResult))
+  info = undefined
+
 instance HasInfo (DirectCodec m) (Message (ServiceProtocol m) _st EndState) where
-  info codec _ =
-    annField
-      "This message is signalled by terminating the network connection, hence the encoding takes zero bytes."
-      $ aliasField
-        ( "Message<"
-            ++ (Text.unpack . decodeUtf8 . unVersionIdentifier $ versionIdentifier (Proxy @(ServiceProtocol m)))
-            ++ ",st,EndState"
-            ++ ">"
-        )
-        (info codec (Proxy @()))
+  info = undefined

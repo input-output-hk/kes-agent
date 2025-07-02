@@ -98,4 +98,4 @@ instance StateTokenI WaitForConfirmationState where stateToken = SWaitForConfirm
 instance StateTokenI EndState where stateToken = SEndState
 
 instance VersionedProtocol (ServiceProtocol m) where
-  versionIdentifier _ = mkVersionIdentifier "Service:2.0"
+  versionIdentifier = undefined
