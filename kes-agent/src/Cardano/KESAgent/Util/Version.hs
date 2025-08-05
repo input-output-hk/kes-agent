@@ -7,4 +7,4 @@ import Cardano.KESAgent.Util.GetVersion (getProgramVersion)
 import Language.Haskell.TH
 
 libraryVersion :: String
-libraryVersion = $(litE =<< (stringL <$> runIO getProgramVersion))
+libraryVersion = "v0.1.0.0"
