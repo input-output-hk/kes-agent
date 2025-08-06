@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name: kes-agent
-version: 0.1.0.0
+version: 0.1.0.1
 
 synopsis: KES agent library and binaries
 description: KES agent provides a solution for storing KES keys

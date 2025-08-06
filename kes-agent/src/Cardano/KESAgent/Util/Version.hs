@@ -7,4 +7,4 @@ import Cardano.KESAgent.Util.GetVersion (getProgramVersion)
 import Language.Haskell.TH
 
 libraryVersion :: String
-libraryVersion = "v0.1.0.0"
+libraryVersion = "v0.1.0.1"
