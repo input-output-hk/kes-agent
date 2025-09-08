@@ -15,6 +15,7 @@ index-state:
 
 packages:
   kes-agent
+  kes-agent-crypto
 
 package kes-agent
   ghc-options: -Wincomplete-patterns
