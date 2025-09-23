@@ -94,10 +94,8 @@ instance StateTokenI WaitForConfirmationState where stateToken = SWaitForConfirm
 instance StateTokenI EndState where stateToken = SEndState
 
 instance NamedCrypto c => VersionedProtocol (ServiceProtocol m c) where
-  versionIdentifier = spVersionIdentifier
+  versionIdentifier = undefined
 
 spVersionIdentifier ::
   forall m c. NamedCrypto c => Proxy (ServiceProtocol m c) -> VersionIdentifier
-spVersionIdentifier _ =
-  mkVersionIdentifier $
-    "Service:" <> unCryptoName (cryptoName (Proxy @c)) <> ":0.4"
+spVersionIdentifier = undefined

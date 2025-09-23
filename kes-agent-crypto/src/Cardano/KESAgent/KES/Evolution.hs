@@ -52,38 +52,23 @@ evolutionConfigFromGenesisFile = JSON.eitherDecodeFileStrict'
 
 -- | Determine the current KES period from the local host's RTC.
 getCurrentKESPeriod :: MonadTime m => EvolutionConfig -> m KESPeriod
-getCurrentKESPeriod ec =
-  getCurrentTime >>= \now -> pure (getCurrentKESPeriodAt now ec)
+getCurrentKESPeriod = undefined
 
 -- | Determine the current KES period from the local host's RTC, based on the
 -- given evolution parameters.
 getCurrentKESPeriodAt :: UTCTime -> EvolutionConfig -> KESPeriod
-getCurrentKESPeriodAt now ec =
-  let diffSecs = floor (nominalDiffTimeToSeconds $ diffUTCTime now (systemStart ec))
-      kesPeriodDuration = fromIntegral (slotLength ec) * fromIntegral (slotsPerKESPeriod ec)
-  in KESPeriod (diffSecs `div` kesPeriodDuration)
+getCurrentKESPeriodAt = undefined
 
 getTimeToNextKESPeriod :: MonadTime m => EvolutionConfig -> m Int
-getTimeToNextKESPeriod ec =
-  getCurrentTime >>= \now -> pure (getTimeToNextKESPeriodAt now ec)
+getTimeToNextKESPeriod = undefined
 
 getTimeToNextKESPeriodAt :: UTCTime -> EvolutionConfig -> Int
-getTimeToNextKESPeriodAt now ec =
-  let kesPeriod = getCurrentKESPeriodAt now ec
-      (_, end) = getKESPeriodTimes ec kesPeriod
-      MkFixed diffPico = nominalDiffTimeToSeconds (diffUTCTime end now)
-  in fromInteger $ diffPico `div` 1000000
+getTimeToNextKESPeriodAt = undefined
 
 -- | Get the start and end times of the give KES period, based on the given
 -- evolution parameters
 getKESPeriodTimes :: EvolutionConfig -> KESPeriod -> (UTCTime, UTCTime)
-getKESPeriodTimes ec (KESPeriod period) =
-  let kesPeriodDuration = slotLength ec * slotsPerKESPeriod ec
-      diffSecs = fromIntegral (fromIntegral period * kesPeriodDuration)
-      slotSecs = fromIntegral kesPeriodDuration
-      start = addUTCTime diffSecs (systemStart ec)
-      end = addUTCTime slotSecs start
-  in (start, end)
+getKESPeriodTimes = undefined
 
 -- | Evolve a KES key to the current period. The old key will be released as
 -- appropriate. If the current period exceeds the key's available evolutions,
@@ -99,9 +84,7 @@ updateKESToCurrent ::
   OCert v ->
   SignKeyWithPeriodKES (KES v) ->
   m (Maybe (SignKeyWithPeriodKES (KES v)))
-updateKESToCurrent ec context cert skp = do
-  currentPeriod <- getCurrentKESPeriod ec
-  updateKESTo context currentPeriod cert skp
+updateKESToCurrent = undefined
 
 -- | Evolve a KES key to the specified period. The old key will be released as
 -- appropriate. If the specified period exceeds the key's available evolutions,
@@ -116,27 +99,4 @@ updateKESTo ::
   OCert v ->
   SignKeyWithPeriodKES (KES v) ->
   m (Maybe (SignKeyWithPeriodKES (KES v)))
-updateKESTo context currentPeriod cert skp = do
-  let targetEvolution =
-        unKESPeriod currentPeriod
-          - unKESPeriod (ocertKESPeriod cert)
-  if periodKES skp >= targetEvolution
-    then
-      return (Just skp) -- key is already up to date or newer
-    else do
-      skp'May <- updateKESWithPeriod context skp
-      case skp'May of
-        Nothing ->
-          -- update failed (t >= totalPeriodsKES)
-          return Nothing
-        Just skp' ->
-          -- update succeeded
-          if periodKES skp' == targetEvolution
-            then
-              -- reached target evolution, so we're done
-              return (Just skp')
-            else
-              -- Still not enough, keep going.
-              -- This also captures the (theoretical) case where we have updated
-              -- past the last evolution, but the recursive call will catch this.
-              updateKESTo context currentPeriod cert skp'
+updateKESTo = undefined
