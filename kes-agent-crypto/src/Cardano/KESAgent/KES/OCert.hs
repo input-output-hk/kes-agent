@@ -130,11 +130,7 @@ makeOCert ::
   KESPeriod ->
   SignKeyDSIGN (DSIGN c) ->
   OCert c
-makeOCert vkHot n kesPeriod skCold =
-  OCert vkHot n kesPeriod sig
-  where
-    signable = OCertSignable vkHot n kesPeriod
-    sig = signedDSIGN () signable skCold
+makeOCert = undefined
 
 -- | Validate an operational certificate, returning a 'Left' error description,
 -- or 'Right' '()' if the certificate is valid.
@@ -147,12 +143,4 @@ validateOCert ::
   VerKeyKES (KES c) ->
   OCert c ->
   Either String ()
-validateOCert vkCold vkHot ocert = do
-  when (ocertVkHot ocert /= vkHot) (Left "Verification key does not match")
-  verifyDSIGN () vkCold signable sig
-  where
-    signable :: OCertSignable c
-    signable = OCertSignable (ocertVkHot ocert) (ocertN ocert) (ocertKESPeriod ocert)
-
-    sig :: SigDSIGN (DSIGN c)
-    SignedDSIGN sig = ocertSigma ocert
+validateOCert = undefined
