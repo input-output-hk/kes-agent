@@ -27,17 +27,17 @@ let
         package = tools.cabal-fmt;
       };
       stylish-haskell = {
-        enable = true;
+        enable = false;
         package = tools.stylish-haskell;
         args = [ "--config" ".stylish-haskell.yaml" ];
       };
       fourmolu = {
-        enable = true;
+        enable = false;
         package = tools.fourmolu;
         args = [ "--mode" "inplace" ];
       };
       hlint = {
-        enable = true;
+        enable = false;
         package = tools.hlint;
         args = [ "--hint" ".hlint.yaml" ];
       };
