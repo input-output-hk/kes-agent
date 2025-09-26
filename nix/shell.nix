@@ -7,7 +7,7 @@ let
     "ghc967".cabal-fmt = project.projectVariants.ghc967.tool "cabal-fmt" "latest";
     "ghc967".haskell-language-server = project.projectVariants.ghc967.tool "haskell-language-server" "latest";
     "ghc967".stylish-haskell = project.projectVariants.ghc967.tool "stylish-haskell" "latest";
-    "ghc967".fourmolu = project.projectVariants.ghc967.tool "fourmolu" "latest";
+    "ghc967".fourmolu = project.projectVariants.ghc967.tool "fourmolu" "0.16.2.0";
     "ghc967".hlint = project.projectVariants.ghc967.tool "hlint" "latest";
   };
 
@@ -32,9 +32,11 @@ let
         args = [ "--config" ".stylish-haskell.yaml" ];
       };
       fourmolu = {
-        enable = false;
+        enable = true;
         package = tools.fourmolu;
-        args = [ "--mode" "inplace" ];
+        # this will add these args duplicate args = [ "--mode" "inplace" ];
+        # see https://github.com/input-output-hk/iogx/issues/116
+        args = [ ];
       };
       hlint = {
         enable = false;
@@ -42,7 +44,7 @@ let
         args = [ "--hint" ".hlint.yaml" ];
       };
       shellcheck = {
-        enable = true;
+        enable = false;
         package = pkgs.shellcheck;
       };
     };
