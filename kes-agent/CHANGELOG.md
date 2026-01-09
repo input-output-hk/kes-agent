@@ -1,8 +1,8 @@
 # Changelog - Kes Agent
 
-## [v1.0.0.0-beta.1] 
+## [v1.0.0.0]
 
-This is the first **Beta Release** of the Kes Agent, marking a major architectural step toward the stable $v1.0.0.0$. This version includes significant dependency updates, improved control handling, and enhanced deployment assets. This Beta release is suitable for testnets.
+This is the first major release of the Kes Agent, intended for experimental purposes alongside `cardano-node` version 10.7. This version includes significant dependency updates, improved control handling, and enhanced deployment assets. This release is suitable for testnets, but is not currently recommended for full production use.
 
 ### 🌟 Added & Architectural Changes
 
