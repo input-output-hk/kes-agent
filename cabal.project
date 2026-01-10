@@ -39,3 +39,12 @@ package kes-agent
 
 package cardano-crypto-class
   flags: +secp256k1-support
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-network
+  tag: 63675a60e7a24b5af3ce931df3077f980daeb6c5
+  --sha256: sha256-tTj8CTlm5jDuAwy6x/O1icxUpPrQyCjWZgDOriRPC5Q=
+  subdir:
+    network-mux
+    ouroboros-network
