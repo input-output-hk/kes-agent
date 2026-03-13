@@ -1,5 +1,16 @@
 # Changelog - Kes Agent
 
+## [v1.2.0.0]
+
+### Breaking
+
+- Update to `cardano-crypto-class-2.3.1.0`
+- Update to `typed-protocols-1.2`
+
+### Non-Breaking
+
+- Allow `random-1.3.*`
+
 ## [v1.1.0.0]
 
 - This version adds support for `ouroboros-network-0.24.0.0`. Older versions of `ouroboros-network` (and its associated packages) are no longer supported.
