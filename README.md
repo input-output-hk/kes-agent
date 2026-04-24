@@ -1,66 +1,60 @@
 # KES Agent
 
-## Introduction
+A sidecar daemon for `cardano-node` that holds KES signing keys in mlocked memory, replacing on-disk key files.
 
-Key Evolving Signature (KES) cryptography is a cryptographic signing scheme
-designed for forward security. In Cardano, we use this to sign blocks,
-"evolving" keys every 36 hours.
+[![Haskell CI](https://github.com/input-output-hk/kes-agent/actions/workflows/haskell.yml/badge.svg)](https://github.com/input-output-hk/kes-agent/actions/workflows/haskell.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-This forward security however requires that after a key has been evolved, all
-copies of the old key must be securely erased. This implies that KES keys must
-never be stored on disk. The KES Agent exists so that KES keys can be securely
-stored in memory, rather than on disk, and will manage the evolution of KES keys
-in place of the node, allowing for the keys to persist (in ephemeral storage)
-even over a restart of the node itself.
+## Overview
 
-For further information, see [the Guide](doc/guide.markdown).
+KES (Key Evolving Signature) keys must never be stored on disk: once a key evolution is deleted, an attacker who later compromises the host cannot reconstruct past signatures. KES Agent is a standalone process that keeps the current KES sign key in mlocked RAM, evolves it autonomously every KES period (~36 hours), and hands it to `cardano-node` over a local Unix socket. Because the key lives only in memory, it survives node restarts without ever touching persistent storage.
 
-## OS Compatibility
+For production installation, system hardening, multi-agent setups, and key rotation procedures, see the [User Guide](doc/guide.markdown).
 
-KES Agent does not currently work on Windows.
+## Prerequisites
 
-It will compile and run, but the test suite has been disabled because it fails
-/ deadlocks, and it will almost certainly not work correctly.
+- **Platform:** Linux only. Windows builds compile but are not supported and will not work correctly.
+- **cardano-node:** 10.7.1 or later (the first version with KES Agent socket support).
+- **Haskell toolchain:** GHC and Cabal (install via [GHCup](https://www.haskell.org/ghcup/)).
+- **System libraries:** `libsodium`, `secp256k1`, and `libblst`.
+  - `libblst` requires manual installation of headers and `libblst.a` into system-wide locations and a `pkgconf` entry. See the [User Guide](doc/guide.markdown#build-prerequisites) for details.
 
-## Building & Installing
+## Quick Start
 
-Quick guide:
+Pre-built installer tarballs are available on the [Releases](https://github.com/input-output-hk/kes-agent/releases) page. To build from source instead, follow the steps below.
 
-Clone git repository:
+### Build & Install
 
 ```sh
 git clone https://github.com/input-output-hk/kes-agent/ ./kes-agent
 cd kes-agent
-```
-
-Build & install:
-
-```sh
+cabal update
 cabal install exe:kes-agent exe:kes-agent-control
 ```
 
-Running tests:
+### Run
+
+```sh
+kes-agent run \
+    --service-address       /path/to/service.socket \
+    --control-address       /path/to/control.socket \
+    --cold-verification-key /path/to/cold.vkey \
+    --genesis-file          /path/to/shelley-genesis.json
+```
+
+### Verify
+
+```sh
+kes-agent-control --control-address /path/to/control.socket info
+```
+
+## Development
+
+### Running Tests
 
 ```sh
 cabal test all
 ```
-
-Running KES agent as a regular process:
-
-```sh
-kes-agent run \
-    -s /path/to/service.socket -c /path/to/control.socket \
-    --cold-verification-key /path/to/cold.vkey \
-    --genesis-file /path/to/genesis.json
-```
-
-Querying the KES agent to verify that it works:
-
-```sh
-KES_AGENT_CONTROL_PATH=/path/to/control.socket kes-agent-control info
-```
-
-For further information, see [the Guide](doc/guide.markdown).
 
 ## License & Copyright
 
