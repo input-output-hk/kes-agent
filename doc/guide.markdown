@@ -32,7 +32,7 @@ practice.
 
 There is one caveat though: in order for all this to work, we need to actually
 delete those keys, and because reliably erasing data from modern mass storage
-devices (such as harddisks or SSD's) is effectively not a thing, we need to
+devices (such as hard disks or SSDs) is not reliably achievable, we need to
 handle the keys such that they are never stored on disk. However, we also need
 the Node process to be able to restart, for various reasons, and without
 external storage, this means the key would be lost after a restart.
@@ -60,7 +60,7 @@ The KES Agent system consist of 3 components:
       agents will connect to this socket.
     - A "control" socket, on which commands are received. The Control Client
       will connect to this socket.
-  The Agent will also automonously evolve keys, such that any keys it sends out
+  The Agent will also autonomously evolve keys, such that any keys it sends out
   on demand will match the current KES period on the ledger. Further, while the
   KES Agent can generate new KES keys, they have to be signed externally. Any
   newly generated keys will be held in a *staging area* inside the KES agent
@@ -72,10 +72,10 @@ The KES Agent system consist of 3 components:
   autonomously, so there is no need for the Agent to send out subsequent
   evolutions of the same key, unless the Node reconnects. The latter normally
   only happens when a Node process restarts.
-- The *Control Client* (to be implemented), a utility that can be used to
-  generate keys and OpCerts, and push them to an Agent via the "control"
-  socket. This utility should run on a separate host, and needs access to the
-  "cold" key in order to sign the "hot" keys managed by the Agent.
+- The *Control Client* (`kes-agent-control`), a command-line utility used to
+  generate staged KES keys, install operational certificates, and query the
+  state of a running Agent via the "control" socket. It is typically run from
+  a management host with access to the Agent's control socket.
 
 This package contains:
 
@@ -182,14 +182,6 @@ following steps are required:
 2. Edit `/etc/kes-agent/agent.toml` as desired
 3. Reload the `kes-agent` configuration (`systemctl reload kes-agent`).
 
-### Docker
-
-A Docker image is available (TODO: document image name). The image includes a
-default configuration, but, for obvious reasons, no cold verification key. To
-provide one, mount it into the container, like so:
-
-    docker run --mount type=bind,source=/path/to/your/cold.vkey,target=/etc/kes-agent/cold.vkey cardano/kes-agent:0.1
-
 ### Building From Source
 
 #### Build Prerequisites
@@ -205,7 +197,7 @@ provide one, mount it into the container, like so:
   - Copying the library `libblst.a` into an appropriate system-wide location
     (`/usr/local/lib/`).
   - Creating a `pkgconf` entry so that the build tooling can find the library.
-  - Running `ldconf` to register the library with the system-wide linker.
+  - Running `ldconfig` to register the library with the system-wide linker.
 - GHC, the Haskell compiler
 - The Haskell build tool, Cabal
 
@@ -226,15 +218,14 @@ provide one, mount it into the container, like so:
 
 KES Agent can run in two modes:
 
-- "Service Mode", in which it acts as a Unix service ("daemon"). The process
-  can be managed using the `start`, `stop`, `restart` and `status` subcommands;
-  when started, it will double-fork and drop privileges, and it will send all
-  log output to syslog.
-  This is the recommended mode for a production setup.
-- "Normal Mode", in which it runs as a regular process; the process starts
-  immediately, does not fork or drop privileges, and writes log output to
-  stdout. This mode is mainly useful for debugging and development purposes; it
-  is not recommended for production use.
+- "Service Mode" (`kes-agent start/stop/restart/status`), in which it acts as
+  a Unix daemon. When started, it will double-fork and drop privileges, and it
+  will send all log output to syslog. This is the recommended mode for a
+  production setup.
+- "Normal Mode" (`kes-agent run`), in which it runs as a regular foreground
+  process; it does not fork or drop privileges, and writes log output to
+  stdout. This mode is mainly useful for debugging and development; it is not
+  recommended for production use.
 
 To run KES Agent as a daemon using systemd, the following steps are necessary:
 
@@ -266,15 +257,18 @@ To tell `kes-agent-control` where to find the KES agent, you can use the
 following methods:
 
 1. Set up the kes-agent to listen for control connections on the default path,
-   `/tmp/kes-agent-control.socket`.
+   `/tmp/kes-agent-control.socket`. Note that for production use a path under
+   `/run/kes-agent/` (e.g. `/run/kes-agent/control.socket`) is recommended, as
+   it benefits from systemd's socket lifecycle management.
 2. Pass the control socket path as a command-line argument to
    `kes-agent-control`, using the `--control-address` or `-c` option.
+   This takes precedence over the environment variable below.
 3. Pass the control socket path through the environment, by setting the
    `KES_AGENT_CONTROL_PATH` environment variable to the desired path.
 
 ### Setting Up An Air-gapped Signing Host
 
-You need an "expendable" computer for this, such as a cheap single-board, that
+You need an "expendable" computer for this, such as a cheap single-board computer, that
 never connects to the internet once set up. The only things that need to be
 installed on this machine are:
 
@@ -299,12 +293,15 @@ Now:
    umount /mnt/secure-device
    ```
    **DO NOT COPY THE SIGN KEY** - the sign key must never leave the signing host.
-
+For a more involved setup consider something like [this](https://github.com/perturbing/x86_64-linux-cold-machine/tree/main) cold machine setup.
 ### Configuring `cardano-node` To Use The KES Agent
 
-The only difference from the usual procedure is using the new flag 
+> **Note:** KES Agent support was introduced in `cardano-node` 10.7.1. This is
+> the minimum version required to use the `--shelley-kes-agent-socket` flag.
+
+The only difference from the usual procedure is using the new flag
 `--shelley-kes-agent-socket SERVICE_SOCKET_PATH` instead of using the kes.skey
-from file. 
+from file.
 
 ```shell
 cardano-node run \
@@ -317,6 +314,7 @@ cardano-node run \
   --shelley-operational-certificate opcert.cert \
   --port                            3001
 ```
+
 ### Running `cardano-node`, `kes-agent-control` And/Or `kes-agent` On Separate Hosts
 
 By default, `kes-agent` uses Unix domain sockets for communication with both
@@ -376,14 +374,14 @@ The options explained in detail:
   they clash with the newly created local sockets. Forwarded local socket files
   will remain on the local filesystem after the forwarding ssh process
   terminates, and subsequent attempts at binding the same address will fail;
-  this option chances that, so that the existing file will instead be deleted.
+  this option changes that, so that the existing file will instead be deleted.
 
 You may also want to wrap this up in a systemd service; note however that you
 must set up authentication in such a way that it never requires any user
 interaction (e.g., asking for a password or passphrase).
 
-Similar forwardings will be needed for "bootstrapping" connections and control
-client connections.
+For examples of bootstrapping and control socket forwarding in multi-agent
+setups, see [Recommended Setups](#recommended-setups).
 
 You can also set up the tunnel from the other side, using the `-R` option;
 note, however, that there is no equivalent option to `StreamLocalBindUnlink`
@@ -393,73 +391,292 @@ that separately.
 Usage
 -----
 
-To generate and push a new KES sign key:
+This section is a concise reference for the key rotation procedure. For a
+complete step-by-step walkthrough of initial setup (including starting the
+agent and switching `cardano-node`), see
+[Migrating From KES Key Files to KES Agent](#migrating-from-kes-key-files-to-kes-agent).
+
+To generate and install a new KES sign key:
 
 ### On The Control Host
 
-- Find the number of slots per KES period; we can get this from the genesis
-  file, e.g.:
+- Calculate the current KES period:
   ```sh
-  cat mainnet-shelley-genesis.json | grep KESPeriod
-  > "slotsPerKESPeriod": 3600,
+  slotsPerKESPeriod=$(jq -r '.slotsPerKESPeriod' shelley-genesis.json)
+  currentSlot=$(cardano-cli query tip --mainnet | jq -r '.slot')
+  kesPeriod=$(( currentSlot / slotsPerKESPeriod ))
+  echo "KES period: $kesPeriod"
   ```
-- Find the current tip of the blockchain:
+  > **Note:** Replace `--mainnet` with `--testnet-magic <network-magic>` if on
+  > a testnet.
+
+- Generate a new staged key:
   ```sh
-  cardano-cli query tip --mainnet
-  {
-      "epoch": 259,
-      "hash": "dbf5104ab91a7a0b405353ad31760b52b2703098ec17185bdd7ff1800bb61aca",
-      "slot": 26633911,
-      "block": 5580350
-  }
+  kes-agent-control --control-address /run/kes-agent/control.socket \
+    gen-staged-key --kes-verification-key-file kes.vkey
   ```
-  We want the "slot" value.
-- Calculate the current KES period from this:
-  ```sh
-  expr 26633911 / 3600
-  > 7398
-  ```
-- Generate a new key by using the kes-agent-control's `gen-staged-key` command:
-  ```sh
-  kes-agent-control gen-staged-key \
-    --kes-verification-key-file kes.vkey
-  ```
-- Copy `kes.vkey` to your secure removable storage device
+- Copy `kes.vkey` and the KES period value to your secure removable storage
+  device.
 
 ### On The Signing Host
 
-- Copy `kes.vkey` from the secure removable storage device
-- Generate an OpCert:
+- Copy `kes.vkey` from the secure removable storage device.
+- Generate an OpCert (substituting your calculated KES period for `<N>`):
   ```sh
   cardano-cli node issue-op-cert \
-    --kes-verification-key-file kes.vkey \
-    --cold-signing-key-file cold.skey \
-    --operational-certificate-issue-counter opcert.counter \
-    --kes-period 7398 \
+    --kes-verification-key-file               kes.vkey \
+    --cold-signing-key-file                   cold.skey \
+    --operational-certificate-issue-counter-file opcert.counter \
+    --kes-period <N> \
     --out-file opcert.cert
   ```
-- Copy `ocert.cert` to the secure removable storage device
+- Copy `opcert.cert` to the secure removable storage device.
 
 ### On The Control Host
 
-- Copy `ocert.cert` from the secure removable storage device
-- Use the kes-agent-control's `install-key` command to upload the opcert and
-  activate the staged key:
+- Copy `opcert.cert` from the secure removable storage device.
+- Install the key:
   ```sh
-  kes-agent-control install-key --opcert-file opcert.cert
+  kes-agent-control --control-address /run/kes-agent/control.socket \
+    install-key --opcert-file opcert.cert
   ```
-- The control CLI will now upload the key.
-- You can use the `info` command to verify that the key has been uploaded
-  correctly:
+- Verify the key is active:
   ```sh
-  kes-agent-control info
+  kes-agent-control --control-address /run/kes-agent/control.socket info
   ```
+
+Migrating From KES Key Files to KES Agent
+-----------------------------------------
+
+If you are currently running a block-producing node with KES keys stored on disk
+(`kes.skey` / `kes.vkey`), this section walks you through migrating to the KES
+Agent without interrupting block production.
+
+**What changes:** Instead of passing `--shelley-kes-signing-key kes.skey` to
+`cardano-node`, you will pass `--shelley-kes-agent-socket` pointing to a local
+Unix socket managed by the KES Agent. The KES Agent holds the sign key in
+mlocked memory; the key never touches disk.
+
+**What stays the same:** Your cold key, VRF key, pool registration, and opcert
+counter are all unchanged. You will issue a fresh opcert as part of this
+migration (which increments the counter), but your pool identity is unaffected.
+
+In the steps below, *block-producer host* refers to the machine running
+`cardano-node`. In many SPO setups this is the same machine from which
+`kes-agent-control` is run; if yours differs, ensure the control socket is
+accessible from your management machine (e.g. via SSH socket forwarding, as
+described in [Running on Separate Hosts](#running-cardano-node-kes-agent-controland-or-kes-agent-on-separate-hosts)).
+
+### Prerequisites
+
+- `cardano-node` 10.7.1 or later (the first version with KES Agent support)
+- A running block-producing node with:
+    - `cold.vkey` available on the block-producer host
+    - `cold.skey`, `opcert.counter`, and `cardano-cli` on your air-gapped signing host
+    - `vrf.skey` on the block-producer host
+    - A current `opcert.cert`
+- `kes-agent` and `kes-agent-control` installed on the block-producer host
+  (see [Installation](#installation))
+- `cardano-cli` and `jq` available on the block-producer host
+
+### Step 1 — Start the KES Agent
+
+On your block-producer host, start `kes-agent` pointing to your existing cold
+verification key. The agent will listen on two sockets: a *service* socket for
+the node, and a *control* socket for the CLI:
+
+```sh
+kes-agent run \
+    --service-address  /run/kes-agent/service.socket \
+    --control-address  /run/kes-agent/control.socket \
+    --cold-verification-key /path/to/cold.vkey \
+    --genesis-file /path/to/shelley-genesis.json
+```
+
+> **Note:** Choose socket paths that suit your setup. The service socket must
+> be readable by the user running `cardano-node`; the control socket must be
+> readable by the user running `kes-agent-control`. For production use, run
+> `kes-agent` as a systemd service (see [Installing KES Agent](#installing-kes-agent)).
+
+Your existing `cardano-node` continues running normally with `kes.skey` while
+you complete the remaining steps.
+
+### Step 2 — Generate a New KES Key
+
+Ask the KES Agent to generate a new KES sign key. The sign key is created
+inside the agent's secure memory and never written to disk. Only the
+verification key is written to a file, which you will need for the opcert:
+
+```sh
+kes-agent-control --control-address /run/kes-agent/control.socket gen-staged-key \
+    --kes-verification-key-file kes.vkey
+```
+
+Transfer `kes.vkey` to your air-gapped signing host.
+
+### Step 3 — Issue a New Operational Certificate
+
+On the block-producer host, calculate the current KES period:
+
+```sh
+slotsPerKESPeriod=$(jq -r '.slotsPerKESPeriod' shelley-genesis.json)
+currentSlot=$(cardano-cli query tip --mainnet | jq -r '.slot')
+kesPeriod=$(( currentSlot / slotsPerKESPeriod ))
+echo "KES period: $kesPeriod"
+```
+
+> **Note:** `cardano-cli query tip` reads the node socket from the
+> `CARDANO_NODE_SOCKET_PATH` environment variable. Ensure it is set to your
+> node's socket path before running this command. Replace `--mainnet` with
+> `--testnet-magic <network-magic>` if you are on a testnet.
+
+Transfer the calculated KES period value to your air-gapped signing host.
+On the air-gapped signing host, issue the opcert, substituting the period
+value you calculated above for `<N>`:
+
+```sh
+cardano-cli node issue-op-cert \
+    --kes-verification-key-file              kes.vkey \
+    --cold-signing-key-file                  cold.skey \
+    --operational-certificate-issue-counter-file opcert.counter \
+    --kes-period <N> \
+    --out-file opcert.cert
+```
+
+Transfer `opcert.cert` back to the block-producer host.
+
+> **Important:** Issuing a new opcert increments `opcert.counter`. Keep this
+> file safe — submitting a certificate with a counter value lower than a
+> previously used one will make your pool ineligible to produce blocks.
+
+### Step 4 — Activate the Key
+
+On the block-producer host, push the new `opcert.cert` to the KES Agent.
+This verifies it against the staged key, activates it, and makes it
+immediately available to any connected node:
+
+```sh
+kes-agent-control --control-address /run/kes-agent/control.socket install-key \
+    --opcert-file opcert.cert
+```
+
+Verify the agent is holding a valid key:
+
+```sh
+kes-agent-control --control-address /run/kes-agent/control.socket info
+```
+
+Expected output:
+
+```
+--- Agent ---
+Agent version: <version>
+Connected via: /run/kes-agent/control.socket
+Current time: 2025-01-10 12:05:00 UTC
+Current KES period: 521
+Current KES period started: 2025-01-10 12:00:00 UTC
+Next KES period starts: 2025-01-11 00:00:00 UTC
+--- Installed KES SignKey ---
+Timestamp: 2025-01-10 12:04:30 UTC
+VerKey: <hex>
+Valid from period: 521
+Current evolution: 0 / 64
+OpCert number: 3
+OpCert signature: <hex>
+--- Bootstrap Peers ---
+/run/kes-agent/peer.socket: up
+```
+
+The `--- Bootstrap Peers ---` section only appears when the agent was started with
+one or more `--bootstrap-address` flags. Each peer is listed with its socket path
+and current connection status (`up` or `down`).
+
+Check that `Current KES period` matches your calculated value and that
+`OpCert number` is one higher than your previous opcert.
+
+### Step 5 — Switch the Node to KES Agent Mode
+
+Stop `cardano-node`. Modify its startup command, replacing the KES signing key
+flag with the agent socket, and ensure the new `opcert.cert` (issued in Step 3)
+is referenced:
+
+**Before:**
+```sh
+cardano-node run \
+    --config                          configuration.json \
+    --topology                        topology.json \
+    --database-path                   db \
+    --socket-path                     node.socket \
+    --shelley-kes-signing-key         kes.skey \
+    --shelley-vrf-key                 vrf.skey \
+    --shelley-operational-certificate opcert.cert \
+    --port 3001
+```
+
+**After:**
+```sh
+cardano-node run \
+    --config                          configuration.json \
+    --topology                        topology.json \
+    --database-path                   db \
+    --socket-path                     node.socket \
+    --shelley-kes-agent-socket        /run/kes-agent/service.socket \
+    --shelley-vrf-key                 vrf.skey \
+    --shelley-operational-certificate opcert.cert \
+    --port 3001
+```
+
+The node will connect to the KES Agent and receive the current sign key
+automatically. Once you have confirmed the node is producing blocks, you can
+safely delete `kes.skey` from the block-producer host — it is no longer needed
+and keeping it on disk defeats the purpose of the KES Agent.
+
+### Verifying KES Agent Status
+
+After the node starts, check the agent to confirm the key is active:
+
+```sh
+kes-agent-control --control-address /run/kes-agent/control.socket info
+```
+
+To confirm actual block production, check your node logs for `TraceForgedBlock`
+entries, or monitor the chain tip advancing from your block-producer socket.
+
+From this point on, the KES Agent evolves the key autonomously every KES period.
+If the node restarts for any reason, it reconnects to the agent and receives the
+current key evolution automatically — no manual intervention required.
+
+> **Next steps:** The setup above runs a single agent on the same machine as
+> the node. For automatic recovery from agent restarts or host reboots, see the
+> [Backup Agent On Control Host](#backup-agent-on-control-host) setup. Its
+> "Setting It Up" guide builds directly on the commands used here.
 
 Command Reference
 -----------------
 
 The full list of command line options for `kes-agent` and `kes-agent-control`
 can be printed using the `--help` option.
+
+**`kes-agent` subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `run`      | Start the agent in the foreground (Normal Mode). Useful for development and testing. |
+| `start`    | Start the agent as a background daemon (Service Mode). Recommended for production. |
+| `stop`     | Stop a running daemon. |
+| `restart`  | Restart a running daemon. |
+| `status`   | Report the status of a running daemon. |
+
+**`kes-agent-control` subcommands:**
+
+| Subcommand           | Description |
+|----------------------|-------------|
+| `gen-staged-key`     | Ask the agent to generate a new KES key; write the verification key to a file. |
+| `install-key`        | Push an operational certificate to the agent, activating the staged key. |
+| `info`               | Print the current state of the agent (active key, KES period, current evolution). |
+| `drop-key`           | Remove the active key from the agent. |
+| `drop-staged-key`    | Remove the staged (not yet activated) key. |
+| `export-staged-vkey` | Write the staged key's verification key to a file without activating it. |
 
 Recommended Setups
 ------------------
@@ -521,6 +738,30 @@ Agent process runs on the same machine as the block-forging node.
   domain sockets for control and service connections).
 - Keep the control host behind a firewall.
 
+### Setting It Up
+
+For the initial setup, follow the steps in the
+[Migrating From KES Key Files to KES Agent](#migrating-from-kes-key-files-to-kes-agent)
+section, starting `kes-agent` on the node host without a `--bootstrap-address`.
+
+To access the control socket from the control host, forward it over SSH:
+
+```sh
+# On the control host
+autossh -M0 node-host \
+    -L /run/kes-agent/control.socket:/run/kes-agent/control.socket \
+    -nNT \
+    -o StreamLocalBindUnlink=yes \
+    & disown
+```
+
+You can then run `kes-agent-control` commands from the control host as if the
+agent were local:
+
+```sh
+kes-agent-control --control-address /run/kes-agent/control.socket info
+```
+
 ## Backup Agent On Control Host
 
 This setup is suitable for SPOs who use a control host that runs most of the
@@ -573,6 +814,105 @@ agent on the control server remains active during the restart.
   shell and can only access the files it needs (configuration files and local
   domain sockets for control and service connections).
 - Keep the control host behind a firewall.
+
+### Setting It Up
+
+**Step 1: Start Agent B on the control host**
+
+Start Agent B without a `--bootstrap-address` initially — there is no peer to
+bootstrap from yet:
+
+```sh
+# On the control host
+kes-agent run \
+    --service-address       /run/kes-agent/service.socket \
+    --control-address       /run/kes-agent/control.socket \
+    --cold-verification-key /path/to/cold.vkey \
+    --genesis-file          /path/to/shelley-genesis.json
+```
+
+**Step 2: Set up SSH tunnels**
+
+Each agent needs a local socket that forwards to the peer's service socket.
+Because Unix domain sockets cannot span machine boundaries, this is done with
+SSH socket forwarding (see
+[Running on Separate Hosts](#running-cardano-node-kes-agent-controland-or-kes-agent-on-separate-hosts)):
+
+```sh
+# On the node host: forward Agent B's service socket locally
+autossh -M0 control-host \
+    -L /run/kes-agent/agent-b.socket:/run/kes-agent/service.socket \
+    -nNT \
+    -o StreamLocalBindUnlink=yes \
+    & disown
+
+# On the control host: forward Agent A's service socket locally
+autossh -M0 node-host \
+    -L /run/kes-agent/agent-a.socket:/run/kes-agent/service.socket \
+    -nNT \
+    -o StreamLocalBindUnlink=yes \
+    & disown
+```
+
+**Step 3: Start Agent A on the node host**
+
+Agent A exposes no control socket (hardening) and bootstraps from Agent B on
+startup:
+
+```sh
+# On the node host
+kes-agent run \
+    --service-address       /run/kes-agent/service.socket \
+    --bootstrap-address     /run/kes-agent/agent-b.socket \
+    --cold-verification-key /path/to/cold.vkey \
+    --genesis-file          /path/to/shelley-genesis.json
+```
+
+**Step 4: Restart Agent B with a bootstrap address**
+
+Now that Agent A is running, restart Agent B with `--bootstrap-address` pointing
+to the forwarded Agent A socket. This lets Agent B recover automatically while
+Agent A stays up:
+
+```sh
+# On the control host
+kes-agent run \
+    --service-address       /run/kes-agent/service.socket \
+    --control-address       /run/kes-agent/control.socket \
+    --bootstrap-address     /run/kes-agent/agent-a.socket \
+    --cold-verification-key /path/to/cold.vkey \
+    --genesis-file          /path/to/shelley-genesis.json
+```
+
+**Step 5: Install the initial KES key**
+
+From the control host, follow the same steps as in
+[Migrating From KES Key Files to KES Agent](#migrating-from-kes-key-files-to-kes-agent):
+generate a staged key, issue an operational certificate on the air-gapped host,
+and install it:
+
+```sh
+# On the control host
+kes-agent-control --control-address /run/kes-agent/control.socket \
+    gen-staged-key --kes-verification-key-file kes.vkey
+
+# Issue opcert on the air-gapped host (see migration tutorial) ...
+
+kes-agent-control --control-address /run/kes-agent/control.socket \
+    install-key --opcert-file opcert.cert
+```
+
+Once installed, the key propagates from Agent B to Agent A automatically.
+Start `cardano-node` on the node host pointing to Agent A's service socket,
+using the same command shown in
+[Step 5 of the migration tutorial](#step-5--switch-the-node-to-kes-agent-mode)
+(substituting `/run/kes-agent/service.socket` for Agent A's service socket path).
+
+**Key rotation**
+
+When it is time to rotate the KES key, repeat the key-setup steps above:
+`gen-staged-key`, issue a new opcert on the air-gapped host, then `install-key`
+via Agent B's control socket. The new key propagates to Agent A automatically.
 
 ## Basic 3-Agent Setup
 
@@ -640,6 +980,15 @@ allows agents A and C to stay in sync during times when agent B is down.
   shell and can only access the files they need (configuration files and local
   domain sockets for control and service connections).
 - Keep the control host behind a firewall.
+
+### Setting It Up
+
+Setup follows the same principles as
+[Backup Agent On Control Host](#backup-agent-on-control-host), extended to the
+additional agent host: start each agent, establish SSH socket tunnels between
+all peers, and start each agent with `--bootstrap-address` entries pointing to
+its peers' forwarded sockets. Only Agent C (on the control host) has a control
+socket; key rotation via Agent C propagates to all peers automatically.
 
 More Elaborate Setups
 ---------------------
@@ -718,6 +1067,6 @@ in kes-agent/src/Cardano/KESAgent/Processes/:
   uploading OpCerts to activate the staged key, dropping the current key). You
   will need this if you want to make a custom frontend for controlling KES
   agents.
-- kes-agent/src/Cardano/KESAgent/Processes/Agent.hs provides service client
-  functionality (receiving KES sign keys). You will need this if you want your
-  application to connect to a KES agent.
+- kes-agent/src/Cardano/KESAgent/Processes/ServiceClient.hs provides service
+  client functionality (receiving KES sign keys). You will need this if you
+  want your application to connect to a KES agent.
