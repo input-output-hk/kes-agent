@@ -233,7 +233,7 @@ pNormalModeOptions =
           <> metavar "PATH"
           <> help
             ( "Socket address for 'control' connections (empty to disable). "
-                <> "($KES_AGENT_SERVICE_PATH)"
+                <> "($KES_AGENT_CONTROL_PATH)"
             )
       )
     <*> ( Set.fromList
