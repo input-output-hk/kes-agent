@@ -293,7 +293,7 @@ Now:
    umount /mnt/secure-device
    ```
    **DO NOT COPY THE SIGN KEY** - the sign key must never leave the signing host.
-
+For a more involved setup consider something like [this](https://github.com/perturbing/x86_64-linux-cold-machine/tree/main) cold machine setup.
 ### Configuring `cardano-node` To Use The KES Agent
 
 > **Note:** KES Agent support was introduced in `cardano-node` 10.7.1. This is
