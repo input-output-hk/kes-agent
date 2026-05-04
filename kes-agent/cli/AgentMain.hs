@@ -28,7 +28,10 @@ import Control.Arrow ((>>>))
 import Control.Concurrent.Async (race)
 import Control.Concurrent.Class.MonadMVar
 import Control.Monad (when, (<=<))
-import Control.Monad.Class.MonadThrow (SomeException, bracket, catch, finally)
+import Control.Monad.Class.MonadThrow (SomeException, bracket, catch)
+#if !defined(mingw32_HOST_OS)
+import Control.Monad.Class.MonadThrow (finally)
+#endif
 import Control.Monad.Class.MonadTime (getCurrentTime)
 import Control.Tracer
 import Data.Bifunctor
@@ -518,7 +521,7 @@ agentTraceFormatBS = encodeUtf8 . Text.pack . pretty
 -- | Print log messages on 'stdout'. Requires a lock to avoid concurrent log
 -- messages from different threads getting mangled together.
 stdoutAgentTracer :: ColorMode -> Priority -> MVar IO () -> Tracer IO AgentTrace
-stdoutAgentTracer mode maxPrio lock = Tracer $ \msg -> do
+stdoutAgentTracer mode maxPrio lock = mkTracer $ \msg -> do
   timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
   let prio = agentTracePrio msg
       color = prioColor prio
@@ -539,7 +542,7 @@ defaultAgentTracer :: Tracer IO AgentTrace
 defaultAgentTracer = nullTracer
 #else
 syslogAgentTracer :: Tracer IO AgentTrace
-syslogAgentTracer = Tracer $ \event ->
+syslogAgentTracer = mkTracer $ \event ->
   syslog (agentTracePrio event) (agentTraceFormatBS event)
 
 defaultAgentTracer :: Tracer IO AgentTrace
@@ -646,7 +649,7 @@ installSighupHandler _ =
 restoreSighupHandler () =
   return ()
 
-mkTracer logLock logTarget maxPrio =
+mkLogTargetTracer logLock logTarget maxPrio =
     case logTarget of
       LogDevNull -> nullTracer
       LogSyslog -> error "Syslog is not supported on Windows"
@@ -660,7 +663,7 @@ installSighupHandler optionsSignal = do
 restoreSighupHandler oldSighup =
   Posix.installHandler Posix.lostConnection oldSighup Nothing
 
-mkTracer logLock logTarget maxPrio =
+mkLogTargetTracer logLock logTarget maxPrio =
     case logTarget of
       LogDevNull -> nullTracer
       LogSyslog -> syslogAgentTracer
@@ -702,7 +705,7 @@ runNormally configPathMay nmo' = withIOManager $ \ioManager -> do
                     (Proxy @StandardCrypto)
                     (socketSnocket ioManager)
                     makeSocketRawBearer
-                    agentOptions' {agentTracer = mkTracer logLock logTarget' maxPrio'}
+                    agentOptions' {agentTracer = mkLogTargetTracer logLock logTarget' maxPrio'}
                     agent
                 goRun agent'
             )
@@ -722,7 +725,7 @@ runNormally configPathMay nmo' = withIOManager $ \ioManager -> do
         (Proxy @StandardCrypto)
         (socketSnocket ioManager)
         makeSocketRawBearer
-        agentOptions {agentTracer = mkTracer logLock logTarget maxPrio}
+        agentOptions {agentTracer = mkLogTargetTracer logLock logTarget maxPrio}
     )
     ( \agent -> do
         finalizeAgent agent

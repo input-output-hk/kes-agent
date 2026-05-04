@@ -112,7 +112,7 @@ formatServiceTrace msg =
   in (prio, pretty msg)
 
 stdoutStringTracer :: ColorMode -> Priority -> MVar IO () -> Tracer IO (Priority, String)
-stdoutStringTracer mode maxPrio lock = Tracer $ \(prio, msg) -> do
+stdoutStringTracer mode maxPrio lock = mkTracer $ \(prio, msg) -> do
   let color = prioColor prio
   timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
   when (prio <= maxPrio) $

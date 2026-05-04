@@ -1,5 +1,12 @@
 # Revision history for kes-agent-crypto
 
+## 1.2.0.0
+
+### Breaking
+
+- Update to `contra-tracer ^>=0.2.1`
+- Update to `cardano-crypto-class ^>=2.5`
+
 ## 1.1.0.0 -- 2026-03-13
 
 ### Breaking
