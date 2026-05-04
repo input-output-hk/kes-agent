@@ -543,6 +543,7 @@ instance
 instance
   ( SodiumHashAlgorithm h
   , KESAlgorithm kes
+  , KESAlgorithm (SumKES h kes)
   , HasInfo (DirectCodec m) (SignKeyKES kes)
   , HasInfo (DirectCodec m) (VerKeyKES kes)
   , HashSize h ~ SeedSizeKES kes
@@ -610,6 +611,7 @@ instance
   ( SodiumHashAlgorithm h
   , KESAlgorithm kes
   , OptimizedKESAlgorithm kes
+  , KESAlgorithm (CompactSumKES h kes)
   , HasInfo (DirectCodec m) (SignKeyKES kes)
   , HasInfo (DirectCodec m) (VerKeyKES kes)
   , HashSize h ~ SeedSizeKES kes
