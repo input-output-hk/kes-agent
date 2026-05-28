@@ -13,7 +13,16 @@ stored in memory, rather than on disk, and will manage the evolution of KES keys
 in place of the node, allowing for the keys to persist (in ephemeral storage)
 even over a restart of the node itself.
 
-For further information, see [the Guide](doc/guide.markdown).
+## Documentation
+
+- [User Guide](doc/guide.markdown) — concepts, installation, configuration, and
+  recommended setups (includes a glossary, Restart & Recovery, and a
+  known-good-state checklist).
+- [Migration guide](doc/migration.markdown) — moving an existing block producer
+  from an on-disk KES key to the agent.
+- [Troubleshooting](doc/troubleshooting.markdown) — common situations, log
+  filters, and how to tell a real problem from a harmless warning.
+- [FAQ](doc/faq.markdown) — design rationale and security model.
 
 ## OS Compatibility
 

@@ -79,6 +79,26 @@ restarts, it will connect to the agent again after restarting, and the agent
 will serve the current evolution of the KES key, after which the node can start
 forging blocks.
 
+### What happens when the KES agent restarts (but the node keeps running)?
+
+The agent holds its KES key only in memory, so when the agent process restarts
+it loses that key. The node, however, is unaffected for the moment: once it has
+received a key it evolves it autonomously and keeps forging blocks on its own,
+without needing the agent — it only needs the agent again the next time it
+restarts, or when you push a brand-new key.
+
+What you need to do depends on the topology:
+
+- In a **single-agent** setup, the restarted agent comes back up empty, so you
+  must install a key into it again (generate a staged key, issue an OpCert, and
+  install it) before the node next restarts.
+- In a **backup-agent** (multi-agent) setup, the restarted agent reconnects to
+  its bootstrap peer and is served the current key automatically, so no manual
+  intervention is required.
+
+This is the same trade-off described in the guide's *Restart & Recovery*
+section.
+
 ### What happens when the entire server reboots?
 
 In this case, a KES agent running on the same server will terminate, and the
