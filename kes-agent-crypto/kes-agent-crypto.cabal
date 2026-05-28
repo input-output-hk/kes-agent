@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               kes-agent-crypto
-version:            1.0.0.0
+version:            1.1.0.0
 synopsis: KES agent crypto library
 -- description:
 license:            Apache-2.0
@@ -22,7 +22,7 @@ common project-config
          -Wunused-packages
 
 common base-dependencies
-    build-depends: base >=4.14.0.0 && <4.22.0.0
+    build-depends: base >=4.14 && <4.23
 
 
 library
@@ -40,7 +40,7 @@ library
                    Cardano.KESAgent.Util.RefCounting
     build-depends: aeson >=2.0
                  , bytestring >=0.11
-                 , cardano-crypto-class ^>=2.2.3.2
+                 , cardano-crypto-class:cardano-crypto-class ^>=2.3.1.0
                  , cardano-binary
                    -- We need to pin this down to this exact version, because
                    -- there are two independent packages named contra-tracer:
@@ -50,6 +50,7 @@ library
                    -- packages have the same name, we can only disambiguate
                    -- them by demanding a version that only one of them has.
                  , contra-tracer ==0.1.0.1 || ==0.1.0.2
+                 , deepseq
                  , io-classes
                  , nothunks
                  , quiet

@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  hackage.haskell.org 2025-08-05T15:28:56Z,
-  cardano-haskell-packages 2026-01-20T18:32:46Z,
+  , hackage.haskell.org 2026-02-19T00:44:22Z
+  , cardano-haskell-packages 2026-03-07T10:30:57Z
 
 packages:
   kes-agent
@@ -39,3 +39,56 @@ package kes-agent
 
 package cardano-crypto-class
   flags: +secp256k1-support
+
+-- cabal-allow-newer
+if impl (ghc >= 9.14)
+  allow-newer:
+    -- https://github.com/haskell/aeson/issues/1155
+    , aeson:QuickCheck
+    , aeson:containers
+    , aeson:template-haskell
+
+    -- https://github.com/phadej/boring/issues/48
+    , boring:base
+
+    -- https://github.com/well-typed/canonical-json/issues
+    , canonical-json:containers
+
+    -- https://github.com/well-typed/cborg/issues/373
+    , cborg:base
+    , cborg:containers
+
+    -- https://github.com/well-typed/cborg/issues/373
+    , cborg-json:base
+
+    -- https://github.com/haskellari/indexed-traversable/issues/49
+    , indexed-traversable:base
+    , indexed-traversable:containers
+    , indexed-traversable-instances:base
+
+    -- https://github.com/haskellari/qc-instances/issues/110
+    , quickcheck-instances:base
+    , quickcheck-monoids:base
+
+    -- https://github.com/haskellari/these/issues/211
+    , semialign:base
+    , semialign:containers
+
+    -- No source repository listed on Hackage. Have emailed the maintainer.
+    , serdoc-core:template-haskell
+
+    -- https://github.com/well-typed/cborg/issues/373
+    , serialise:base
+    , serialise:containers
+    , serialise:time
+
+    -- https://github.com/haskellari/these/issues/211
+    , these:base
+
+    -- https://github.com/haskellari/tree-diff/issues/102
+    , tree-diff:QuickCheck
+    , tree-diff:base
+    , tree-diff:containers
+
+    -- https://github.com/haskell-hvr/uuid/issues/95
+    , uuid-types:template-haskell
