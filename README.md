@@ -2,12 +2,24 @@
 
 A sidecar daemon for `cardano-node` that holds KES signing keys in mlocked memory, replacing on-disk key files.
 
+**KES (Key Evolving Signature) keys must never be stored on disk: once a key evolution is deleted, an attacker who later compromises the host cannot reconstruct past signatures. KES Agent is a standalone process that keeps the current KES sign key in mlocked RAM, evolves it autonomously every KES period (~36 hours), and hands it to `cardano-node` over a local Unix socket. Because the key lives only in memory, it survives node restarts without ever touching persistent storage.**
+
+
 [![Haskell CI](https://github.com/input-output-hk/kes-agent/actions/workflows/haskell.yml/badge.svg)](https://github.com/input-output-hk/kes-agent/actions/workflows/haskell.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## Overview
 
-KES (Key Evolving Signature) keys must never be stored on disk: once a key evolution is deleted, an attacker who later compromises the host cannot reconstruct past signatures. KES Agent is a standalone process that keeps the current KES sign key in mlocked RAM, evolves it autonomously every KES period (~36 hours), and hands it to `cardano-node` over a local Unix socket. Because the key lives only in memory, it survives node restarts without ever touching persistent storage.
+## Documentation
+
+- [User Guide](doc/guide.markdown) — concepts, installation, configuration, and
+  recommended setups (includes a glossary, Restart & Recovery, and a
+  known-good-state checklist).
+- [Migration guide](doc/migration.markdown) — moving an existing block producer
+  from an on-disk KES key to the agent.
+- [Troubleshooting](doc/troubleshooting.markdown) — common situations, log
+  filters, and how to tell a real problem from a harmless warning.
+- [FAQ](doc/faq.markdown) — design rationale and security model.
 
 For production installation, system hardening, multi-agent setups, and key rotation procedures, see the [User Guide](doc/guide.markdown).
 

@@ -45,6 +45,47 @@ sending keys over a network socket, we do it such that the keys are moved
 directly between mlocked memory and the socket file descriptors, without using
 any intermediate data structures for serialization/deserialization.
 
+Glossary
+--------
+
+If you are new to the KES Agent, these are the terms used throughout this guide
+and the CLI output. They are explained in more depth in the sections that
+follow.
+
+- **KES key**: the "hot" Key Evolving Signature key used by a block-forging
+  node to sign blocks. It exists in two parts: the **KES sign key** (secret,
+  must never touch disk) and the **KES verification key** (public, used to build
+  an OpCert).
+- **KES period**: a ~36-hour window. The node evolves the KES sign key once per
+  period and deletes the previous evolution; this is what provides forward
+  security.
+- **Cold key**: the long-lived identity key of the pool, kept on an air-gapped
+  signing host. The **cold sign key** signs OpCerts and must never leave that
+  host; the **cold verification key** (`cold.vkey`) is public and is used by the
+  agent to verify OpCerts.
+- **OpCert (operational certificate)**: a certificate, signed by the cold key,
+  that authorises a particular KES verification key (with a serial number and a
+  start KES period). It is what binds a KES key to your pool identity.
+- **Staged key**: a freshly generated KES key held in the agent's staging area.
+  It is *not yet active* and is not served to nodes — it is waiting for a
+  matching OpCert.
+- **Installed (active) key**: the KES key the agent has verified against an
+  OpCert and is actively serving to connected nodes. When `kes-agent-control
+  info` reports an *Installed KES SignKey*, this is what it means.
+- **Service socket**: the socket on which the agent *serves keys*. Nodes (and
+  other agents) connect here. Configured on the node with
+  `--shelley-kes-agent-socket`.
+- **Control socket**: the socket on which the agent *receives commands* from the
+  `kes-agent-control` CLI (generate, install, drop keys, query info).
+- **Bootstrap peer**: another agent this agent connects to in order to *receive*
+  a key copy, providing redundancy. See
+  [Recommended Setups](#recommended-setups) and the
+  [Troubleshooting guide](troubleshooting.markdown).
+- **Host roles**: the **node host** runs `cardano-node` and (usually) an agent;
+  the **control host** runs `kes-agent-control`; the air-gapped **signing host**
+  holds the cold sign key and issues OpCerts. These may be three machines or, in
+  the simplest setup, fewer.
+
 Design Overview
 ---------------
 
@@ -187,19 +228,88 @@ following steps are required:
 #### Build Prerequisites
 
 - The `git` version control system
-- The `gcc` compiler, including C++ support
-- Developer libraries for `libsodium`
-- Developer libraries for `secp256k1` (https://github.com/bitcoin-core/secp256k1)
-- Developer libraries for `libblst` (https://github.com/supranational/blst).
-  Note that installation requires some undocumented manual steps:
-  - Copying the headers into an appropriate system-wide location
-    (`/usr/local/include/`).
-  - Copying the library `libblst.a` into an appropriate system-wide location
-    (`/usr/local/lib/`).
-  - Creating a `pkgconf` entry so that the build tooling can find the library.
-  - Running `ldconfig` to register the library with the system-wide linker.
-- GHC, the Haskell compiler
-- The Haskell build tool, Cabal
+- The `gcc` compiler, including C++ support (and `make`, `autoconf`, `libtool`,
+  `pkg-config`)
+- GHC, the Haskell compiler, and the Haskell build tool, Cabal (we recommend
+  installing both via [GHCup](https://www.haskell.org/ghcup/))
+- The C cryptography libraries `libsodium` (IOG fork), `secp256k1`, and
+  `libblst`, described below.
+
+These are **exactly the same C cryptography libraries that `cardano-node`
+requires** — including the IOG fork of `libsodium`, not the stock distribution
+package. The authoritative, maintained instructions live in the Cardano
+developer portal, under
+[Installing cardano-node → C library dependencies](https://developers.cardano.org/docs/get-started/infrastructure/node/installing-cardano-node/#c-library-dependencies);
+follow that page and keep the versions in sync with the `cardano-node` release
+you are targeting.
+
+**If you already build `cardano-node` from source on this host, these libraries
+are already installed and you can skip this section.**
+
+For convenience, the commands below mirror that guide. They use version
+variables pinned by `iohk-nix` (`IOHKNIX_VERSION`, `SODIUM_VERSION`,
+`SECP256K1_VERSION`, `BLST_VERSION`); set them as shown in the developer-portal
+guide so you build the exact revisions `cardano-node` expects.
+
+```sh
+mkdir -p ~/src && cd ~/src
+```
+
+**`libsodium` (IOG fork):**
+
+```sh
+git clone https://github.com/intersectmbo/libsodium
+cd libsodium && git checkout $SODIUM_VERSION
+./autogen.sh && ./configure
+make && sudo make install
+cd ~/src
+```
+
+**`secp256k1`:**
+
+```sh
+git clone --depth 1 --branch ${SECP256K1_VERSION} https://github.com/bitcoin-core/secp256k1
+cd secp256k1
+./autogen.sh && ./configure --enable-module-schnorrsig --enable-experimental
+make && sudo make install
+cd ~/src
+```
+
+The `--enable-module-schnorrsig --enable-experimental` flags are required; the
+library will build without them but Cardano code will fail to link.
+
+**`libblst`:** upstream does not ship an installer, so the headers, the static
+library, and a `pkg-config` entry must be placed by hand:
+
+```sh
+git clone --depth 1 --branch ${BLST_VERSION} https://github.com/supranational/blst
+cd blst && ./build.sh
+cat > libblst.pc << EOF
+prefix=/usr/local
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+Name: libblst
+Description: Multilingual BLS12-381 signature library
+URL: https://github.com/supranational/blst
+Version: ${BLST_VERSION#v}
+Cflags: -I\${includedir}
+Libs: -L\${libdir} -lblst
+EOF
+sudo cp libblst.pc /usr/local/lib/pkgconfig/
+sudo cp bindings/blst_aux.h bindings/blst.h bindings/blst.hpp /usr/local/include/
+sudo cp libblst.a /usr/local/lib
+sudo chmod u=rw,go=r /usr/local/{lib/{libblst.a,pkgconfig/libblst.pc},include/{blst.{h,hpp},blst_aux.h}}
+cd ~/src
+```
+
+Finally, make sure the dynamic linker and `pkg-config` can find the libraries
+you just installed (add these to your shell profile to make them permanent):
+
+```sh
+export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
+export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+```
 
 #### Building KES Agent
 
@@ -213,6 +323,29 @@ following steps are required:
     cabal update
     cabal install exe:kes-agent exe:kes-agent-control
     ```
+
+##### Building on one host and installing on another
+
+You usually do **not** want to install GHC, Cabal, and the build toolchain on a
+hardened block producer. Instead, build on a separate workstation that runs the
+**same OS and architecture** as the block producer, then copy the binaries
+across.
+
+The repository ships a helper that builds `kes-agent` and packages it together
+with the systemd unit files and `install.sh` into a versioned tarball:
+
+```sh
+./scripts/make-release-bundle.sh
+# produces dist/kes-agent-<version>-<arch>.tar.gz
+```
+
+Copy that tarball to the target host, unpack it, and run the bundled
+`./install.sh` (see [Using a tarball](#using-a-tarball)). Note that the binaries
+are dynamically linked against `libsodium` and `secp256k1`, so the **same shared
+libraries must also be present on the target host** (`libblst` is linked
+statically and does not need to be installed there). The build and target hosts
+must have compatible `glibc` versions; building on the same OS release as the
+target is the simplest way to guarantee this.
 
 #### Installing KES Agent
 
@@ -295,6 +428,11 @@ Now:
    **DO NOT COPY THE SIGN KEY** - the sign key must never leave the signing host.
 For a more involved setup consider something like [this](https://github.com/perturbing/x86_64-linux-cold-machine/tree/main) cold machine setup.
 ### Configuring `cardano-node` To Use The KES Agent
+
+> **Migrating an existing block producer?** For a complete, ordered walkthrough
+> of moving a node that currently uses a `kes.skey` file on disk over to the
+> agent — including the foreground-to-systemd transition — see the
+> [Migration guide](migration.markdown).
 
 > **Note:** KES Agent support was introduced in `cardano-node` 10.7.1. This is
 > the minimum version required to use the `--shelley-kes-agent-socket` flag.
@@ -657,6 +795,58 @@ Command Reference
 The full list of command line options for `kes-agent` and `kes-agent-control`
 can be printed using the `--help` option.
 
+Restart & Recovery
+------------------
+
+**Read this before going to production.** Because the KES sign key lives only in
+memory, *what survives a restart depends on which process restarts*. The three
+cases below behave very differently, and confusing them is the most common
+source of operator error.
+
+A node that has already received a valid KES key evolves it autonomously and can
+keep forging blocks until that key reaches the end of its evolutions — even if
+the agent is temporarily unavailable. A node only needs a working agent
+connection **at startup** (and when you push a brand-new key). This is why a
+brief agent outage does not, by itself, stop block production.
+
+| Event | In-memory KES key | What you must do |
+|-------|-------------------|------------------|
+| **`cardano-node` process restarts** (agent stays up) | Agent keeps the key. | Nothing. The node reconnects to the service socket, is re-served the current evolution, and resumes forging automatically. |
+| **KES agent restarts** (node stays up) | Agent **loses** its key. | **Single-agent:** reinstall a key (`gen-staged-key` → OpCert → `install-key`). The node keeps forging in the meantime on the key it already holds. **Backup-agent:** the restarted agent reconnects to its bootstrap peer and is re-served the key automatically (self-healing) — no action needed. |
+| **Full host reboot** | Both agent and node lose their in-memory keys. | **Single-agent:** reinstall a key, then the node reconnects and is re-served. **Backup-agent on a separate host:** the surviving agent still holds the key; the rebooted agent bootstraps from it and the node reconnects automatically. |
+
+In short: a **single-agent** setup trades a small amount of availability for
+simplicity — an agent restart or host reboot requires a manual key
+re-installation. A **backup-agent** setup (see
+[Recommended Setups](#recommended-setups)) self-heals across these events at the
+cost of extra moving parts. See also the
+[FAQ](faq.markdown#design-considerations) and the
+[Troubleshooting guide](troubleshooting.markdown).
+
+Verifying A Correct Setup (Known-Good State)
+--------------------------------------------
+
+After migrating a node to the KES agent (or after any recovery action), run
+through this checklist. When every item passes, the node is correctly forging
+through the agent:
+
+- [ ] `kes-agent-control info` reports an **Installed KES SignKey** (not only a
+      staged key).
+- [ ] The verification key shown by `kes-agent-control info` matches the KES
+      verification key in the OpCert the node is using.
+- [ ] The `cardano-node` process is started with
+      `--shelley-kes-agent-socket` (pointing at the agent's service socket).
+- [ ] The `cardano-node` process **no longer** uses `--shelley-kes-key` and no
+      `kes.skey` file is referenced on the block producer.
+- [ ] The node logs show `Forge.Loop.StartLeadershipCheck` (leadership checks
+      are running).
+- [ ] The node logs show KES info with sane `startPeriod` / `currPeriod` /
+      `endPeriod` values, and `currPeriod` is within the start/end range.
+- [ ] `cardano-cli query tip` works and reports `syncProgress` of `100.00`.
+- [ ] The `kes-agent` systemd service is `active` (in a production systemd
+      setup).
+
+If any item fails, see the [Troubleshooting guide](troubleshooting.markdown).
 **`kes-agent` subcommands:**
 
 | Subcommand | Description |
