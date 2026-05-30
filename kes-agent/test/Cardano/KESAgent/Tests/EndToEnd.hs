@@ -438,7 +438,9 @@ kesAgentGenesisFileEnvVar =
         (threadDelay 500_000)
     let agentLines = map Text.unpack agentOut
     assertBool
-      ("agent should fail to start when KES_AGENT_GENESIS_FILE points at a missing file\n" ++ unlines agentLines)
+      ( "agent should fail to start when KES_AGENT_GENESIS_FILE points at a missing file\n"
+          ++ unlines agentLines
+      )
       ( not (any ("listening on service socket" `isInfixOf`) agentLines)
           && not (null agentLines)
       )
