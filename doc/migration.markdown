@@ -56,6 +56,14 @@ Step 1 — Start the KES agent
 For the first run it is convenient to start the agent in the foreground so you
 can watch its output. (We move it to a systemd service at the end.)
 
+If you are already comfortable with `kes-agent`, you can skip this foreground
+trial: set the agent up as a systemd service now (see
+[Installing KES Agent](guide.markdown#installing-kes-agent)), then work through
+Steps 2–6 below using the service's control and service socket paths in place of
+the foreground agent's. In that case you can ignore the
+[Moving the agent into a systemd service](#moving-the-agent-into-a-systemd-service)
+section at the end — you are already there.
+
 ```sh
 kes-agent run \
   -s service.socket \
@@ -108,7 +116,7 @@ Step 3 — Issue an OpCert (air-gapped signing host)
 cardano-cli node issue-op-cert \
   --kes-verification-key-file kes.vkey \
   --cold-signing-key-file cold.skey \
-  --operational-certificate-issue-counter opcert.counter \
+  --operational-certificate-issue-counter-file opcert.counter \
   --kes-period 7398 \
   --out-file opcert.cert
 ```
@@ -189,14 +197,14 @@ Starting the service does not transfer the key from the foreground agent. So:
 4. Restart `cardano-node` so it reconnects to the service socket the systemd
    agent listens on.
 
-Do **not** configure the temporary foreground agent as a permanent bootstrap
-peer of the systemd agent — it will not exist after the migration, and a dead
-bootstrap peer left in the configuration will show as permanently
-`connecting...` in `kes-agent-control info` (this is harmless but looks alarming;
-see the [Troubleshooting guide](troubleshooting.markdown)).
-
-If you want an agent that survives reboots without manual re-installation,
-configure a **backup agent** on a second host instead (see
+Re-installing the key (step 3) is the correct way to get it into the systemd
+agent — do **not** try to bridge the two by listing the temporary foreground
+agent as a bootstrap peer. It vanishes after the migration, leaving a dead peer
+that lingers as `connecting...` in `kes-agent-control info` and looks like a
+fault (see the [Troubleshooting guide](troubleshooting.markdown)). Bootstrap
+peers are meant for durable redundancy between long-lived agents: if you want an
+agent that survives reboots without manual re-installation, run a **backup
+agent** on a second host instead (see
 [Recommended Setups](guide.markdown#recommended-setups) and
 [Restart & Recovery](guide.markdown#restart--recovery)).
 

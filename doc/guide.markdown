@@ -590,7 +590,7 @@ If you are currently running a block-producing node with KES keys stored on disk
 (`kes.skey` / `kes.vkey`), this section walks you through migrating to the KES
 Agent without interrupting block production.
 
-**What changes:** Instead of passing `--shelley-kes-signing-key kes.skey` to
+**What changes:** Instead of passing `--shelley-kes-key kes.skey` to
 `cardano-node`, you will pass `--shelley-kes-agent-socket` pointing to a local
 Unix socket managed by the KES Agent. The KES Agent holds the sign key in
 mlocked memory; the key never touches disk.
@@ -727,7 +727,9 @@ OpCert signature: <hex>
 
 The `--- Bootstrap Peers ---` section only appears when the agent was started with
 one or more `--bootstrap-address` flags. Each peer is listed with its socket path
-and current connection status (`up` or `down`).
+and current connection status: `up`, `connecting...` (configured but not reached
+yet — it keeps retrying), or `down`. A peer stuck at `connecting...` is usually
+harmless; see the [Troubleshooting guide](troubleshooting.markdown).
 
 Check that `Current KES period` matches your calculated value and that
 `OpCert number` is one higher than your previous opcert.
@@ -745,7 +747,7 @@ cardano-node run \
     --topology                        topology.json \
     --database-path                   db \
     --socket-path                     node.socket \
-    --shelley-kes-signing-key         kes.skey \
+    --shelley-kes-key                 kes.skey \
     --shelley-vrf-key                 vrf.skey \
     --shelley-operational-certificate opcert.cert \
     --port 3001
