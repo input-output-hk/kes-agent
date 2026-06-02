@@ -65,9 +65,16 @@ instance Semigroup CommonOptions where
       (re1 <|> re2)
       (ra1 <|> ra2)
 
+-- | The control socket the client connects to when neither @--control-address@
+-- nor @KES_AGENT_CONTROL_PATH@ is supplied. Applied as the final fallback in
+-- 'mkControlClientOptions', consistent with how the other option defaults are
+-- resolved at the point of use.
+defaultControlSocketPath :: FilePath
+defaultControlSocketPath = "/tmp/kes-agent-control.socket"
+
 defCommonOptions :: CommonOptions =
   CommonOptions
-    { optControlPath = Just "/tmp/kes-agent-control.socket"
+    { optControlPath = Nothing
     , optVerbosity = Just 0
     , optRetryDelay = Nothing
     , optRetryExponential = Nothing
@@ -373,7 +380,7 @@ formatReason RecvErrorUnknown = "unknown error"
 
 mkControlClientOptions :: CommonOptions -> IOManager -> IO (ControlClientOptions IO Socket SockAddr)
 mkControlClientOptions opts ioManager = do
-  controlPath <- maybe (error "No control address") return (optControlPath opts)
+  let controlPath = fromMaybe defaultControlSocketPath (optControlPath opts)
 
   let retryDelay = fromMaybe 1000 $ optRetryDelay opts
   let retryExponential = fromMaybe False $ optRetryExponential opts
@@ -522,7 +529,7 @@ runGetInfo opt' = withIOManager $ \ioManager -> do
   let cPutStrLn = hcPutStrLn cmode stdout
   cPutStrLn (bold defaultColor) $ printf "--- Agent ---"
   printf "Agent version: %s\n" $ fromMaybe "<unknown>" (agentInfoProgramVersion info)
-  printf "Connected via: %s\n" $ fromMaybe "<unknown>" (optControlPath opt')
+  printf "Connected via: %s\n" $ fromMaybe defaultControlSocketPath (optControlPath opt)
   printf "Current time: %s\n" $ show (agentInfoCurrentTime info)
   printf "Current KES period: %u\n" (unKESPeriod $ agentInfoCurrentKESPeriod info)
   printf "Current KES period started: %s\n" $

@@ -23,11 +23,12 @@ import Control.Monad.Class.MonadThrow (SomeException, catch, throwIO)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.List (isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
+import System.Environment (getEnvironment)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO
@@ -122,6 +123,39 @@ tests =
         "evolution"
         [ testCase "key evolves forward" kesAgentEvolvesKeyInitially
         , testCase "key evolves when period flips over" kesAgentEvolvesKey
+        ]
+    , testGroup
+        "kes-agent-control environment variables"
+        [ testCase
+            "KES_AGENT_CONTROL_PATH selects the control socket"
+            kesAgentControlHonorsControlPathEnvVar
+        , testCase
+            "KES_AGENT_CONTROL_RETRY_* drive connection retries"
+            kesAgentControlRetryEnvVars
+        ]
+    , testGroup
+        "kes-agent environment variables"
+        [ testCase
+            "KES_AGENT_CONTROL_PATH selects the control socket"
+            kesAgentHonorsControlPathEnvVar
+        , testCase
+            "KES_AGENT_SERVICE_PATH selects the service socket"
+            kesAgentServicePathEnvVar
+        , testCase
+            "KES_AGENT_COLD_VK supplies the cold verification key"
+            kesAgentColdVkEnvVar
+        , testCase
+            "KES_AGENT_GENESIS_FILE is read at startup"
+            kesAgentGenesisFileEnvVar
+        , testCase
+            "KES_AGENT_BOOTSTRAP_PATHS configures bootstrap peers"
+            kesAgentBootstrapPathsEnvVar
+        , testCase
+            "KES_AGENT_LOG_LEVEL sets the log level"
+            kesAgentLogLevelEnvVar
+        , testCase
+            "KES_AGENT_LOG_TARGET sets the log target"
+            kesAgentLogTargetEnvVar
         ]
     ]
 #endif
@@ -246,6 +280,286 @@ kesAgentControlHelp :: Assertion
 kesAgentControlHelp = do
   (exitCode, stdout, stderr) <- controlClient ["--help"]
   assertEqual (stdout ++ "\n" ++ stderr) ExitSuccess exitCode
+
+-- | @kes-agent-control@ must be able to select its control socket from any of
+-- the three documented sources, in precedence order
+-- @-c@/@--control-address@ > @KES_AGENT_CONTROL_PATH@ > the built-in default.
+-- This exercises all three against a real agent.
+--
+-- (This previously documented a bug where @KES_AGENT_CONTROL_PATH@ was ignored
+-- by every subcommand; it now asserts the fixed behaviour.)
+kesAgentControlHonorsControlPathEnvVar :: Assertion
+kesAgentControlHonorsControlPathEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+        bogusAddr = tmpdir </> "bogus.socket"
+    coldVerKeyFile <- getDataFileName "fixtures/cold.vkey"
+    (_agentOutLines, ()) <-
+      withAgent controlAddr serviceAddr [] coldVerKeyFile [] $ do
+        -- Retry flags (top-level options) let the client wait for the agent to
+        -- finish binding its sockets, avoiding a startup race.
+        let waitArgs = ["--retry-attempts", "50", "--retry-delay", "100"]
+
+        -- 1) via the -c flag.
+        assertReachesAgent "via --control-address"
+          =<< controlClient
+            (["--control-address", controlAddr] ++ waitArgs ++ ["info"])
+
+        -- 2) via KES_AGENT_CONTROL_PATH, with no -c (the previously-broken path).
+        assertReachesAgent "via KES_AGENT_CONTROL_PATH"
+          =<< controlClientEnv
+            []
+            [("KES_AGENT_CONTROL_PATH", controlAddr)]
+            (waitArgs ++ ["info"])
+
+        -- 3) precedence: -c overrides the env var. The variable points at a
+        --    non-existent socket while -c points at the real one; the command
+        --    must still reach the agent.
+        assertReachesAgent "with -c overriding KES_AGENT_CONTROL_PATH"
+          =<< controlClientEnv
+            []
+            [("KES_AGENT_CONTROL_PATH", bogusAddr)]
+            (["--control-address", controlAddr] ++ waitArgs ++ ["info"])
+    return ()
+  where
+    assertReachesAgent :: String -> (ExitCode, String, String) -> IO ()
+    assertReachesAgent label (ec, out, err) = do
+      let allOut = out ++ err
+      assertEqual
+        ("info " ++ label ++ " should reach the agent\n" ++ allOut)
+        ExitSuccess
+        ec
+      assertBool
+        ("info " ++ label ++ " should print agent info\n" ++ allOut)
+        ("--- Agent ---" `isInfixOf` allOut)
+
+-- Each test below sets exactly one KES_AGENT_* variable, omits the
+-- corresponding command-line flag, and asserts that variable's specific effect,
+-- so a failure pinpoints the broken variable. KES_AGENT_GROUP and
+-- KES_AGENT_USER are not covered: they only apply to the service-mode daemon and
+-- require root to exercise the privilege drop.
+
+-- | @KES_AGENT_CONTROL_PATH@ selects the control socket the agent listens on.
+-- Supply it only through the environment (no @--control-address@) and confirm a
+-- control client reaches the agent there; had the variable been ignored, the
+-- agent would have listened on the default socket and the client would fail.
+kesAgentHonorsControlPathEnvVar :: Assertion
+kesAgentHonorsControlPathEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+    (cold, gen) <- agentFixtureFiles
+    (agentOut, (ec, out, err)) <-
+      withAgentEnv
+        [("KES_AGENT_CONTROL_PATH", controlAddr)]
+        [ "--service-address"
+        , serviceAddr
+        , "--cold-verification-key"
+        , cold
+        , "--genesis-file"
+        , gen
+        ]
+        (agentInfoVia controlAddr)
+    let clientOut = out ++ err
+        diag = clientOut ++ "\n--- AGENT LOG ---\n" ++ unlines (map Text.unpack agentOut)
+    assertEqual
+      ("client should reach the agent at the KES_AGENT_CONTROL_PATH socket\n" ++ diag)
+      ExitSuccess
+      ec
+    assertBool
+      ("info should print agent details\n" ++ diag)
+      ("--- Agent ---" `isInfixOf` clientOut)
+
+-- | @KES_AGENT_SERVICE_PATH@ selects the service socket the agent listens on.
+kesAgentServicePathEnvVar :: Assertion
+kesAgentServicePathEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+    (cold, gen) <- agentFixtureFiles
+    (agentOut, ()) <-
+      withAgentEnv
+        [("KES_AGENT_SERVICE_PATH", serviceAddr)]
+        [ "--control-address"
+        , controlAddr
+        , "--cold-verification-key"
+        , cold
+        , "--genesis-file"
+        , gen
+        ]
+        (threadDelay 500_000)
+    let agentLines = map Text.unpack agentOut
+    assertBool
+      ("agent should listen on the service socket from KES_AGENT_SERVICE_PATH\n" ++ unlines agentLines)
+      (any (\l -> "listening on service socket" `isInfixOf` l && serviceAddr `isInfixOf` l) agentLines)
+
+-- | @KES_AGENT_COLD_VK@ supplies the cold verification key. Without it the agent
+-- aborts at startup, so reaching the listening state proves it was loaded.
+kesAgentColdVkEnvVar :: Assertion
+kesAgentColdVkEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+    (cold, gen) <- agentFixtureFiles
+    (agentOut, ()) <-
+      withAgentEnv
+        [("KES_AGENT_COLD_VK", cold)]
+        [ "--control-address"
+        , controlAddr
+        , "--service-address"
+        , serviceAddr
+        , "--genesis-file"
+        , gen
+        ]
+        (threadDelay 500_000)
+    let agentLines = map Text.unpack agentOut
+    assertBool
+      ("agent should start with the cold key from KES_AGENT_COLD_VK\n" ++ unlines agentLines)
+      (any ("listening on control socket" `isInfixOf`) agentLines)
+    assertBool
+      ("agent should not report a missing cold verification key\n" ++ unlines agentLines)
+      (not (any ("No cold verification key" `isInfixOf`) agentLines))
+
+-- | @KES_AGENT_GENESIS_FILE@ is read at startup. Pointing it at a non-existent
+-- file aborts startup before the sockets are bound, proving it is consulted.
+kesAgentGenesisFileEnvVar :: Assertion
+kesAgentGenesisFileEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+        bogusGenesis = tmpdir </> "no-such-genesis.json"
+    (cold, _gen) <- agentFixtureFiles
+    (agentOut, ()) <-
+      withAgentEnv
+        [("KES_AGENT_GENESIS_FILE", bogusGenesis)]
+        [ "--control-address"
+        , controlAddr
+        , "--service-address"
+        , serviceAddr
+        , "--cold-verification-key"
+        , cold
+        ]
+        (threadDelay 500_000)
+    let agentLines = map Text.unpack agentOut
+    assertBool
+      ( "agent should fail to start when KES_AGENT_GENESIS_FILE points at a missing file\n"
+          ++ unlines agentLines
+      )
+      ( not (any ("listening on service socket" `isInfixOf`) agentLines)
+          && not (null agentLines)
+      )
+
+-- | @KES_AGENT_BOOTSTRAP_PATHS@ configures bootstrap peers. Agent B is given
+-- agent A's service socket only via the environment; B's @info@ must then list
+-- that peer.
+kesAgentBootstrapPathsEnvVar :: Assertion
+kesAgentBootstrapPathsEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let controlA = tmpdir </> "controlA.socket"
+        serviceA = tmpdir </> "serviceA.socket"
+        controlB = tmpdir </> "controlB.socket"
+        serviceB = tmpdir </> "serviceB.socket"
+    (cold, gen) <- agentFixtureFiles
+    (_agentAOut, (_agentBOut, (ec, out, err))) <-
+      withAgent controlA serviceA [] cold [] $
+        withAgentEnv
+          [("KES_AGENT_BOOTSTRAP_PATHS", serviceA)]
+          [ "--control-address"
+          , controlB
+          , "--service-address"
+          , serviceB
+          , "--cold-verification-key"
+          , cold
+          , "--genesis-file"
+          , gen
+          ]
+          (agentInfoVia controlB)
+    let clientOut = out ++ err
+    assertEqual ("info on agent B should succeed\n" ++ clientOut) ExitSuccess ec
+    assertBool
+      ("agent B's info should list the bootstrap peer from KES_AGENT_BOOTSTRAP_PATHS\n" ++ clientOut)
+      (serviceA `isInfixOf` clientOut)
+
+-- | @KES_AGENT_LOG_LEVEL@ sets the log level. At @error@ the Notice-level
+-- startup lines are suppressed, while the agent still comes up (the client
+-- reaches it).
+kesAgentLogLevelEnvVar :: Assertion
+kesAgentLogLevelEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+    (cold, gen) <- agentFixtureFiles
+    (agentOut, (ec, out, err)) <-
+      withAgentEnv
+        [("KES_AGENT_LOG_LEVEL", "error")]
+        [ "--control-address"
+        , controlAddr
+        , "--service-address"
+        , serviceAddr
+        , "--cold-verification-key"
+        , cold
+        , "--genesis-file"
+        , gen
+        ]
+        (agentInfoVia controlAddr)
+    let clientOut = out ++ err
+        agentLines = map Text.unpack agentOut
+    assertEqual
+      ("client should reach the agent (it started despite quiet logging)\n" ++ clientOut)
+      ExitSuccess
+      ec
+    assertBool
+      ("KES_AGENT_LOG_LEVEL=error should suppress the Notice 'listening' logs\n" ++ unlines agentLines)
+      (not (any ("listening on" `isInfixOf`) agentLines))
+
+-- | @KES_AGENT_LOG_TARGET@ sets the log target. At @null@ the agent produces no
+-- log output, while still coming up (the client reaches it).
+kesAgentLogTargetEnvVar :: Assertion
+kesAgentLogTargetEnvVar =
+  withShortTmpDir $ \tmpdir -> do
+    let (controlAddr, serviceAddr) = socketAddresses tmpdir
+    (cold, gen) <- agentFixtureFiles
+    (agentOut, (ec, out, err)) <-
+      withAgentEnv
+        [("KES_AGENT_LOG_TARGET", "null")]
+        [ "--control-address"
+        , controlAddr
+        , "--service-address"
+        , serviceAddr
+        , "--cold-verification-key"
+        , cold
+        , "--genesis-file"
+        , gen
+        ]
+        (agentInfoVia controlAddr)
+    let clientOut = out ++ err
+        agentLines = map Text.unpack agentOut
+    assertEqual
+      ("client should reach the agent\n" ++ clientOut)
+      ExitSuccess
+      ec
+    assertBool
+      ("KES_AGENT_LOG_TARGET=null should suppress agent log output\n" ++ unlines agentLines)
+      (not (any ("listening on" `isInfixOf`) agentLines))
+
+-- | The control client's @KES_AGENT_CONTROL_RETRY_*@ variables drive connection
+-- retries. The default is no retries, so against a dead socket a non-zero
+-- attempt count proves the variables were applied.
+kesAgentControlRetryEnvVars :: Assertion
+kesAgentControlRetryEnvVars =
+  withShortTmpDir $ \tmpdir -> do
+    let deadSocket = tmpdir </> "no-such-agent.socket"
+    (ec, out, err) <-
+      controlClientEnv
+        []
+        [ ("KES_AGENT_CONTROL_PATH", deadSocket)
+        , ("KES_AGENT_CONTROL_RETRY_ATTEMPTS", "3")
+        , ("KES_AGENT_CONTROL_RETRY_INTERVAL", "50")
+        ]
+        ["info"]
+    let allOut = out ++ err
+        retries = length (filter ("try again" `isInfixOf`) (lines allOut))
+    assertBool
+      ("connecting to a dead socket should ultimately fail\n" ++ allOut)
+      (ec /= ExitSuccess)
+    assertBool
+      ("KES_AGENT_CONTROL_RETRY_ATTEMPTS should produce retry attempts\n" ++ allOut)
+      (retries >= 1)
 
 prependMVar :: MVar IO [a] -> a -> IO ()
 prependMVar var x = do
@@ -1406,6 +1720,68 @@ assertNoMatchingOutputLinesWith extraInfo ignore pattern lines =
 controlClient :: [String] -> IO (ExitCode, String, String)
 controlClient args =
   readProcessWithExitCode "kes-agent-control" args ""
+
+-- | Like 'controlClient', but runs @kes-agent-control@ with an explicitly
+-- controlled environment: the variable names in the first argument are removed
+-- from the inherited environment, and the pairs in the second argument are set.
+-- This lets us test environment-variable handling deterministically,
+-- independent of the environment the test runner happens to have.
+controlClientEnv ::
+  [String] -> [(String, String)] -> [String] -> IO (ExitCode, String, String)
+controlClientEnv unset set args = do
+  baseEnv <- getEnvironment
+  let dropped = unset ++ map fst set
+      childEnv = filter ((`notElem` dropped) . fst) baseEnv ++ set
+      cp = (proc "kes-agent-control" args) {env = Just childEnv}
+  readCreateProcessWithExitCode cp ""
+
+-- | Spawn @kes-agent run@ with a controlled environment (the given variables
+-- are first removed from the inherited environment, then set) and the given run
+-- arguments. Run an action while the agent is up, then return the agent's
+-- captured output (stdout then stderr, line-split) along with the action's
+-- result. Used to test that the agent honours its @KES_AGENT_*@ environment
+-- variables when the corresponding flag is omitted.
+withAgentEnv ::
+  [(String, String)] -> [String] -> IO a -> IO ([Text.Text], a)
+withAgentEnv envOverrides runArgs action = do
+  baseEnv <- getEnvironment
+  let dropped = map fst envOverrides
+      childEnv = filter ((`notElem` dropped) . fst) baseEnv ++ envOverrides
+      cp =
+        (proc "kes-agent" ("run" : runArgs))
+          { std_in = CreatePipe
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          , env = Just childEnv
+          , new_session = True
+          }
+  withCreateProcess cp $ \_ (Just hOut) (Just hErr) ph -> do
+    result <- action
+    terminateProcess ph
+    outT <- Text.lines <$> Text.hGetContents hOut
+    errT <- Text.lines <$> Text.hGetContents hErr
+    return (outT <> errT, result)
+
+-- | The cold verification key and genesis fixtures most agent tests need.
+agentFixtureFiles :: IO (FilePath, FilePath)
+agentFixtureFiles =
+  (,)
+    <$> getDataFileName "fixtures/cold.vkey"
+    <*> getDataFileName "fixtures/mainnet-shelley-genesis.json"
+
+-- | Query a running agent's @info@ via @-c@ (which we trust), retrying so the
+-- query does not race the agent's startup.
+agentInfoVia :: FilePath -> IO (ExitCode, String, String)
+agentInfoVia controlAddr =
+  controlClient
+    [ "--control-address"
+    , controlAddr
+    , "--retry-attempts"
+    , "50"
+    , "--retry-delay"
+    , "100"
+    , "info"
+    ]
 
 controlClientCheck :: String -> [String] -> ExitCode -> [String] -> IO ()
 controlClientCheck label args expectedExitCode expectedOutput = do
