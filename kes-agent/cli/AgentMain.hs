@@ -30,7 +30,7 @@ import Control.Concurrent.Class.MonadMVar
 import Control.Monad (when, (<=<))
 import Control.Monad.Class.MonadThrow (SomeException, bracket, catch, finally)
 import Control.Monad.Class.MonadTime (getCurrentTime)
-import Control.Tracer
+import Control.Tracer (Tracer (..), emit, nullTracer, traceWith)
 import Data.Bifunctor
 import Data.ByteString (ByteString)
 import Data.Char
@@ -518,7 +518,7 @@ agentTraceFormatBS = encodeUtf8 . Text.pack . pretty
 -- | Print log messages on 'stdout'. Requires a lock to avoid concurrent log
 -- messages from different threads getting mangled together.
 stdoutAgentTracer :: ColorMode -> Priority -> MVar IO () -> Tracer IO AgentTrace
-stdoutAgentTracer mode maxPrio lock = Tracer $ \msg -> do
+stdoutAgentTracer mode maxPrio lock = Tracer . emit $ \msg -> do
   timestamp <- utcTimeToPOSIXSeconds <$> getCurrentTime
   let prio = agentTracePrio msg
       color = prioColor prio
@@ -539,7 +539,7 @@ defaultAgentTracer :: Tracer IO AgentTrace
 defaultAgentTracer = nullTracer
 #else
 syslogAgentTracer :: Tracer IO AgentTrace
-syslogAgentTracer = Tracer $ \event ->
+syslogAgentTracer = Tracer . emit $ \event ->
   syslog (agentTracePrio event) (agentTraceFormatBS event)
 
 defaultAgentTracer :: Tracer IO AgentTrace

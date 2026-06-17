@@ -171,7 +171,7 @@ type ControlClientContext m c =
 -- response, and close the connection.
 runControlClient1 ::
   forall c m fd addr a.
-  ControlClientContext m c =>
+  (Monad m, ControlClientContext m c) =>
   ControlClientDrivers c =>
   (ControlClient m c -> ControlHandler m a) ->
   Proxy c ->
@@ -205,12 +205,9 @@ runControlClient1 handler proxy mrb options tracer = do
             (versionHandshakeDriver bearer (ControlClientVersionHandshakeDriverTrace >$< tracer))
             (versionHandshakeClient (map fst drivers))
         case protocolVersionMay >>= (`lookup` drivers) of
-          Nothing ->
-            error
-              "Protocol handshake failed (control)"
-              traceWith
-              tracer
-              ControlClientVersionHandshakeFailed
+          Nothing -> do
+            traceWith tracer ControlClientVersionHandshakeFailed
+            error "ControlClientVersionHandshakeFailed and no return value"
           Just controlClient ->
             handler controlClient bearer tracer
     )

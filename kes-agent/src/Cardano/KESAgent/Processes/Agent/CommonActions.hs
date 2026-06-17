@@ -127,11 +127,11 @@ checkEvolution agent = do
 
 -- | Convenience wrapper for sending 'AgentTrace' messages to an agent's
 -- default 'Tracer'.
-agentTrace :: Agent c m fd addr -> AgentTrace -> m ()
+agentTrace :: Monad m => Agent c m fd addr -> AgentTrace -> m ()
 agentTrace agent = traceWith (agentTracer . agentOptions $ agent)
 
 -- | Convenience wrapper for tracing refcounting events in an agent context.
-agentCRefTracer :: Agent c m fd addr -> Tracer m CRefEvent
+agentCRefTracer :: Monad m => Agent c m fd addr -> Tracer m CRefEvent
 agentCRefTracer = contramap AgentCRefEvent . agentTracer . agentOptions
 
 -- | Modify the bundle stored in a KES agent in a thread-safe manner.

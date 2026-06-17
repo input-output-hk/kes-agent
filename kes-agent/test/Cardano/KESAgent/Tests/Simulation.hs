@@ -86,7 +86,7 @@ import Control.Monad.Class.MonadThrow (
 import Control.Monad.Class.MonadTime
 import Control.Monad.Class.MonadTimer (MonadTimer, threadDelay)
 import Control.Monad.IOSim
-import Control.Tracer (Tracer (..), nullTracer, traceWith)
+import Control.Tracer (Tracer (..), emit, nullTracer, traceWith)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
@@ -249,7 +249,7 @@ mvarPrettyTracer ::
   (MonadTime m, MonadMVar m) =>
   MVar m [String] ->
   (forall a. (Show a, Pretty a) => Tracer m a)
-mvarPrettyTracer var = Tracer $ \x -> modifyMVar_ var $ \strs -> do
+mvarPrettyTracer var = Tracer . emit $ \x -> modifyMVar_ var $ \strs -> do
   t <- utcTimeToPOSIXSeconds <$> getCurrentTime
   let str = printf "%015.4f %s" (realToFrac t :: Double) (pretty x)
   return $ strs ++ [str]
@@ -258,7 +258,7 @@ mvarStringTracer ::
   (MonadTime m, MonadMVar m) =>
   MVar m [String] ->
   Tracer m String
-mvarStringTracer var = Tracer $ \x -> modifyMVar_ var $ \strs -> do
+mvarStringTracer var = Tracer . emit $ \x -> modifyMVar_ var $ \strs -> do
   t <- utcTimeToPOSIXSeconds <$> getCurrentTime
   let str = printf "%015.4f %s" (realToFrac t :: Double) x
   return $ strs ++ [str]
@@ -830,7 +830,7 @@ newCRefTracker = do
   return
     CRefTracker
       { crtResult = readMVar trackerVar
-      , crtTracer = Tracer $ \ev -> do
+      , crtTracer = Tracer . emit $ \ev -> do
           (m :: Map CRefID CRefCount) <- takeMVar trackerVar
           (m' :: Map CRefID CRefCount) <- case creType ev of
             CRefCreate -> do
