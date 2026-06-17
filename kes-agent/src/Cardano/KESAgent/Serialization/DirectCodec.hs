@@ -551,6 +551,7 @@ instance
   , KnownNat (SeedSizeKES kes)
   , KnownNat ((SignKeySizeKES kes + SeedSizeKES kes) + (2 * VerKeySizeKES kes))
   , KnownNat (SigSizeKES kes + (VerKeySizeKES kes * 2))
+  , KnownNat (2 * TotalPeriodsKES kes)
   , forall a. HasInfo (DirectCodec m) (Hash h a)
   ) =>
   HasInfo (DirectCodec m) (SignKeyKES (SumKES h kes))
@@ -618,6 +619,7 @@ instance
   , KnownNat (SeedSizeKES kes)
   , KnownNat ((SignKeySizeKES kes + SeedSizeKES kes) + (VerKeySizeKES kes * 2))
   , KnownNat (SigSizeKES kes + VerKeySizeKES kes)
+  , KnownNat (2 * TotalPeriodsKES kes)
   , forall a. HasInfo (DirectCodec m) (Hash h a)
   ) =>
   HasInfo (DirectCodec m) (SignKeyKES (CompactSumKES h kes))
