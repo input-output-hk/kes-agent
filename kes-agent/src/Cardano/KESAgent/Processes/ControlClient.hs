@@ -205,12 +205,9 @@ runControlClient1 handler proxy mrb options tracer = do
             (versionHandshakeDriver bearer (ControlClientVersionHandshakeDriverTrace >$< tracer))
             (versionHandshakeClient (map fst drivers))
         case protocolVersionMay >>= (`lookup` drivers) of
-          Nothing ->
-            error
-              "Protocol handshake failed (control)"
-              traceWith
-              tracer
-              ControlClientVersionHandshakeFailed
+          Nothing -> do
+            traceWith tracer ControlClientVersionHandshakeFailed
+            error "Protocol handshake failed (control)"
           Just controlClient ->
             handler controlClient bearer tracer
     )

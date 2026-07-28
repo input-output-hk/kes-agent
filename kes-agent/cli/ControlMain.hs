@@ -361,7 +361,7 @@ eitherError (Right x) = return x
 -- | A tracer that prints control client log messages to 'stdout', formatting
 -- them in a somewhat human friendly way.
 humanFriendlyControlTracer :: Int -> Tracer IO ControlClientTrace
-humanFriendlyControlTracer verbosity = Tracer $ \case
+humanFriendlyControlTracer verbosity = mkTracer $ \case
   ControlClientKeyAccepted -> putStrLn "Key accepted."
   ControlClientKeyRejected reason -> putStrLn $ "Key rejected: " ++ formatReason reason
   ControlClientAttemptReconnect 1 -> when (verbosity > 0) $ do

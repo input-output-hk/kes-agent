@@ -123,7 +123,7 @@ import Control.Monad.Class.MonadThrow (
   finally,
  )
 import Control.Monad.Class.MonadTimer (threadDelay)
-import Control.Tracer (Tracer (..), traceWith)
+import Control.Tracer (Tracer, mkTracer, traceWith)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy (..))
@@ -334,7 +334,7 @@ runAgent agent = do
               putTMVar (agentBootstrapConnections agent) m'
 
         let connStatTracer :: Tracer m ServiceClientTrace
-            connStatTracer = Tracer $ \case
+            connStatTracer = mkTracer $ \case
               ServiceClientAttemptReconnect {} ->
                 setConnectionStatus ConnectionConnecting
               ServiceClientConnected {} ->

@@ -8,7 +8,7 @@ import Cardano.Crypto.Libsodium.MLockedSeed
 import Control.Concurrent.Class.MonadSTM.TChan (TChan)
 import Control.Concurrent.Class.MonadSTM.TMVar (TMVar)
 import Control.Monad.Class.MonadTime (MonadTime, getCurrentTime)
-import Control.Tracer (Tracer (..), nullTracer)
+import Control.Tracer (Tracer, nullTracer)
 import Data.Char (toLower)
 import Data.Map.Strict (Map)
 import Data.Text (Text)
