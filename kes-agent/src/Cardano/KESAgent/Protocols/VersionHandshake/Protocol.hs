@@ -1,15 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -71,4 +67,4 @@ instance VersionedProtocol VersionHandshakeProtocol where
   versionIdentifier _ = vpVersionIdentifier
 
 vpVersionIdentifier :: VersionIdentifier
-vpVersionIdentifier = mkVersionIdentifier $ "VersionHandshake:0.1"
+vpVersionIdentifier = mkVersionIdentifier "VersionHandshake:0.1"

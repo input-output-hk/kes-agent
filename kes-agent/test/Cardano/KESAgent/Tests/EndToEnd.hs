@@ -205,7 +205,7 @@ kesAgentFails = do
   let expectedMsg = Text.words "This functionality is not supported on Windows"
   let uncaughtExceptionPrefix = Text.pack "kes-agent: Uncaught exception"
   assertBool
-    ("KES Agent did not terminate with expected platform-specific exception.")
+    "KES Agent did not terminate with expected platform-specific exception."
     ( exitCode /= ExitSuccess
         && ( matchOutputLines 1 expectedMsg agentErrLines
                || any (uncaughtExceptionPrefix `Text.isPrefixOf`) (agentOutLines <> agentErrLines)
@@ -624,7 +624,7 @@ kesAgentControlInstallValid =
         -- Allow some time for service client to actually receive the key
         threadDelay 300_000
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      "SERVICE OUTPUT CHECK\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -}
       4
       ["->", "ServiceClientBlockForging", "0"]
       serviceOutLines
@@ -705,13 +705,13 @@ kesAgentControlUpdateValid =
         -- Allow some time for service client to actually receive the key
         threadDelay 100_000
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      "SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -}
       3
       ["ServiceClientWaitingForCredentials", "->", "ServiceClientBlockForging", "0"]
       serviceOutLines
 
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK 2\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      "SERVICE OUTPUT CHECK 2\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -}
       7
       ["->", "ServiceClientBlockForging", "1"]
       serviceOutLines
@@ -752,7 +752,7 @@ kesAgentControlInstallInvalidOpCert =
           ["Error: OpCert validation failed"]
 
     assertNoMatchingOutputLines 4 ["->", "ServiceClientBlockForging"] serviceOutLines
-    assertMatchingOutputLines 1 (Text.words ("Info Agent: rejecting key: Verification")) agentOutLines
+    assertMatchingOutputLines 1 (Text.words "Info Agent: rejecting key: Verification") agentOutLines
 
 kesAgentControlInstallNoKey :: Assertion
 kesAgentControlInstallNoKey =
@@ -922,7 +922,7 @@ kesAgentControlDropInstalled =
 
     -- First, make sure the key got installed
     assertMatchingOutputLinesWith
-      ("SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -})
+      "SERVICE OUTPUT CHECK 1\n" {- <> (Text.unpack . Text.unlines $ agentOutLines) -}
       3
       ["ServiceClientWaitingForCredentials", "->", "ServiceClientBlockForging", "0"]
       serviceOutLines
@@ -1213,7 +1213,7 @@ kesAgentEvolvesKeyInitially =
     (agentOutLines, serviceOutLines, ()) <-
       withAgentAndService controlAddr serviceAddr [] coldVerKeyFile [] $
         (>>= either error return) $
-          race (threadDelay 10000000 >> return "TIMED OUT") $
+          race (threadDelay 10_000_000 >> return "TIMED OUT") $
             do
               controlClientCheck
                 "Key generated"
@@ -1313,7 +1313,7 @@ kesAgentEvolvesKey =
                 , controlAddr
                 ]
                 ExitSuccess
-                (any (== "Current evolution: 0 / 64"))
+                (elem "Current evolution: 0 / 64")
               controlClientCheckP
                 "Current evolution is not 1"
                 [ "info"
@@ -1321,7 +1321,7 @@ kesAgentEvolvesKey =
                 , controlAddr
                 ]
                 ExitSuccess
-                (all (/= "Current evolution: 1 / 64"))
+                (notElem "Current evolution: 1 / 64")
 
               threadDelay 1_500_000
               controlClientCheckP
@@ -1331,7 +1331,7 @@ kesAgentEvolvesKey =
                 , controlAddr
                 ]
                 ExitSuccess
-                (any (== "Current evolution: 1 / 64"))
+                (elem "Current evolution: 1 / 64")
     assertMatchingOutputLinesWith
       ("SERVICE OUTPUT CHECK\n" <> (Text.unpack . Text.unlines $ agentOutLines))
       4
@@ -1678,44 +1678,44 @@ kesAgentSelfHeal2 =
     return ()
 
 matchOutputLine :: Int -> [Text] -> Text -> Bool
-matchOutputLine ignore pattern line =
-  pattern `isPrefixOf` drop ignore (Text.words line)
+matchOutputLine ignore pat line =
+  pat `isPrefixOf` drop ignore (Text.words line)
 
 matchOutputLines :: Int -> [Text] -> [Text] -> Bool
-matchOutputLines ignore pattern =
-  any (matchOutputLine ignore pattern)
+matchOutputLines ignore pat =
+  any (matchOutputLine ignore pat)
 
 matchNoOutputLines :: Int -> [Text] -> [Text] -> Bool
-matchNoOutputLines ignore pattern =
-  not . any (matchOutputLine ignore pattern)
+matchNoOutputLines ignore pat =
+  not . any (matchOutputLine ignore pat)
 
 assertMatchingOutputLines :: Int -> [Text] -> [Text] -> Assertion
 assertMatchingOutputLines = assertMatchingOutputLinesWith ""
 
 assertMatchingOutputLinesWith :: String -> Int -> [Text] -> [Text] -> Assertion
-assertMatchingOutputLinesWith extraInfo ignore pattern lines =
+assertMatchingOutputLinesWith extraInfo ignore pat lines =
   assertBool
     ( "Pattern not matched: "
-        ++ (Text.unpack . Text.unwords $ pattern)
+        ++ (Text.unpack . Text.unwords $ pat)
         ++ "\n"
         ++ extraInfo
         ++ (Text.unpack . Text.unlines $ lines)
     )
-    (matchOutputLines ignore pattern lines)
+    (matchOutputLines ignore pat lines)
 
 assertNoMatchingOutputLines :: Int -> [Text] -> [Text] -> Assertion
 assertNoMatchingOutputLines = assertNoMatchingOutputLinesWith ""
 
 assertNoMatchingOutputLinesWith :: String -> Int -> [Text] -> [Text] -> Assertion
-assertNoMatchingOutputLinesWith extraInfo ignore pattern lines =
+assertNoMatchingOutputLinesWith extraInfo ignore pat lines =
   assertBool
-    ( "Pattern unexpectedly matched: "
-        ++ (Text.unpack . Text.unwords $ pattern)
+    ( "Pat unexpectedly matched: "
+        ++ (Text.unpack . Text.unwords $ pat)
         ++ "\n"
         ++ extraInfo
         ++ (Text.unpack . Text.unlines $ lines)
     )
-    (matchNoOutputLines ignore pattern lines)
+    (matchNoOutputLines ignore pat lines)
 
 controlClient :: [String] -> IO (ExitCode, String, String)
 controlClient args =

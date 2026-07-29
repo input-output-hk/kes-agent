@@ -410,8 +410,8 @@ isTaggedBundleAgeValid
         | otherwise =
             taggedBundleTimestamp current < taggedBundleTimestamp new
       checkOCerts =
-        let snCurrentMay = (ocertN . bundleOC) <$> taggedBundle current
-            snNewMay = (ocertN . bundleOC) <$> taggedBundle new
+        let snCurrentMay = ocertN . bundleOC <$> taggedBundle current
+            snNewMay = ocertN . bundleOC <$> taggedBundle new
         in case (snCurrentMay, snNewMay) of
              (Just snCurrent, Just snNew) ->
                snCurrent <= snNew
@@ -432,7 +432,7 @@ pushKey agent tbundle = do
   validateTaggedBundle agent tbundle
     >>= either
       handleInvalidBundle
-      (\() -> (handleValidBundle <* checkEvolution agent))
+      (\() -> handleValidBundle <* checkEvolution agent)
   where
     handleInvalidBundle :: String -> m (PushKeyResult c)
     handleInvalidBundle err = do
@@ -477,7 +477,7 @@ pushKey agent tbundle = do
             -- an age check.
             case taggedBundle tbundle of
               Nothing ->
-                agentTrace agent $ AgentInstallingKeyDrop
+                agentTrace agent AgentInstallingKeyDrop
               Just bundle ->
                 agentTrace agent $
                   AgentInstallingNewKey
@@ -496,8 +496,7 @@ pushKey agent tbundle = do
                       AgentInstallingNewKey
                         (mkTaggedBundleTrace (taggedBundleTimestamp tbundle) (taggedBundle tbundle))
                   (Nothing, Nothing) ->
-                    agentTrace agent $
-                      AgentInstallingKeyDrop
+                    agentTrace agent AgentInstallingKeyDrop
                   (Just oldOC, Nothing) ->
                     agentTrace agent $
                       AgentDroppingKey

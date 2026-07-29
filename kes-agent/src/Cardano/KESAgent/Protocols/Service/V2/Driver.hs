@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -88,7 +87,7 @@ serviceDriver s tracer =
       ReflRelativeAgency (StateAgency st) WeHaveAgency (Relative pr (StateAgency st)) ->
       Message (ServiceProtocol m) st st' ->
       m ()
-    sendMessage = \_ msg -> case (stateToken @st, msg) of
+    sendMessage _ msg = case (stateToken @st, msg) of
       (SInitialState, VersionMessage) -> do
         let VersionIdentifier v = versionIdentifier (Proxy @(ServiceProtocol m))
         sendVersion (Proxy @(ServiceProtocol m)) s (ServiceDriverSendingVersionID >$< tracer)
@@ -134,7 +133,7 @@ serviceDriver s tracer =
       ReflRelativeAgency (StateAgency st) TheyHaveAgency (Relative pr (StateAgency st)) ->
       () ->
       m (SomeMessage st, ())
-    recvMessage = \agency () -> case stateToken @st of
+    recvMessage _ () = case stateToken @st of
       SInitialState -> do
         traceWith tracer ServiceDriverReceivingVersionID
         result <- checkVersion (Proxy @(ServiceProtocol m)) s (ServiceDriverReceivedVersionID >$< tracer)

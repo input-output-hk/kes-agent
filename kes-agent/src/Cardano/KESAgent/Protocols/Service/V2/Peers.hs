@@ -72,7 +72,7 @@ servicePusher currentKey nextKey handleResult =
       m (Server (ServiceProtocol m) NonPipelined IdleState m ())
     goKey (TaggedBundle bundleMay timestamp) = do
       return $
-        Server.Yield ((maybe DropKeyMessage KeyMessage bundleMay) timestamp) $
+        Server.Yield (maybe DropKeyMessage KeyMessage bundleMay timestamp) $
           Server.Effect $ do
             return $
               Server.Await $

@@ -2,7 +2,6 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.KESAgent.Protocols.BearerUtil
 where

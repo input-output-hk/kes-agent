@@ -7,6 +7,12 @@
 module Main
 where
 
+-- HLint does not evaluate CPP, so it sees the two conditional
+-- 'Control.Monad.Class.MonadThrow' imports below as one redundant import. They
+-- cannot be merged: 'finally' is only used on non-Windows, so importing it
+-- unconditionally would trip @-Wunused-imports@ on Windows.
+{- HLINT ignore "Use fewer imports" -}
+
 import Cardano.KESAgent.KES.Evolution
 import Cardano.KESAgent.Priority
 import Cardano.KESAgent.Processes.Agent

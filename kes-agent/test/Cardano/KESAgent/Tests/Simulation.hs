@@ -88,6 +88,7 @@ import Control.Monad.Class.MonadTime
 import Control.Monad.Class.MonadTimer (MonadTimer, threadDelay)
 import Control.Monad.IOSim
 import Control.Tracer (Tracer, mkTracer, nullTracer, traceWith)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
@@ -580,7 +581,7 @@ runTestNetwork
           Left err ->
             error ("EXCEPTION\n" ++ show err)
           Right (Left ()) ->
-            return $ counterexample "(KILLED)" $ prop
+            return $ counterexample "(KILLED)" prop
           Right (Right ()) -> do
             return prop
 
@@ -701,7 +702,7 @@ testOneKeyThroughChain
           controlClientReportProperty hooks $
             counterexample "Generated vs. expected VK:" $
               (PrettyBS <$> generatedVKBS) === Just (PrettyBS expectedVKBS)
-          controlClientExec hooks (\c -> controlInstallKey c expectedOC)
+          controlClientExec hooks (`controlInstallKey` expectedOC)
           return ()
 
     let nodeScript =
@@ -798,13 +799,7 @@ toBearerInfo abi =
     , biOutboundAttenuation = attenuation (abiOutboundAttenuation abi)
     , biInboundWriteFailure = abiInboundWriteFailure abi
     , biOutboundWriteFailure = abiOutboundWriteFailure abi
-    , biAcceptFailures =
-        ( \(errDelay, errType) ->
-            ( ABI.delay errDelay
-            , errType
-            )
-        )
-          <$> abiAcceptFailure abi
+    , biAcceptFailures = first ABI.delay <$> abiAcceptFailure abi
     , biSDUSize = toSduSize (abiSDUSize abi)
     }
 

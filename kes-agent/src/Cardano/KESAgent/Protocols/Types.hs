@@ -194,8 +194,8 @@ instance Pretty ServiceDriverTrace where
   pretty (ServiceDriverSendingKey k) = "sending key " ++ pretty k
   pretty (ServiceDriverSentKey k) = "sent key " ++ pretty k
   pretty (ServiceDriverReceivedKey k) = "received key " ++ pretty k
-  pretty (ServiceDriverConfirmingKey) = "confirming key"
-  pretty (ServiceDriverConfirmedKey) = "confirmed key"
+  pretty ServiceDriverConfirmingKey = "confirming key"
+  pretty ServiceDriverConfirmedKey = "confirmed key"
   pretty (ServiceDriverDecliningKey r) = "declining key " ++ pretty r
   pretty (ServiceDriverDeclinedKey r) = "declined key " ++ pretty r
   pretty (ServiceDriverRequestingKeyDrop ts) = "requesting key drop " ++ pretty ts

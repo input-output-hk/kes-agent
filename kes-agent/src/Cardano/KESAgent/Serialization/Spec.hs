@@ -82,7 +82,7 @@ printSpec =
           printIndent indent
           putStrLn $ "#ELEMS: " ++ formatFieldSize (listSize lfi)
           printIndent indent
-          putStrLn $ "ELEM TYPE:"
+          putStrLn "ELEM TYPE:"
           goField (succ indent) (listElemInfo lfi)
         ChoiceField cfi -> do
           printIndent indent

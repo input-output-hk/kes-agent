@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -11,8 +10,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -32,6 +29,10 @@ import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Serialization.RawUtil
 import Cardano.KESAgent.Util.RefCounting
 
+import Cardano.Binary.FixedSizeCodec (
+  rawDecodeFixedSized,
+  rawEncodeFixedSized,
+ )
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.DirectSerialise
 import Cardano.Crypto.Hash.Class
@@ -87,8 +88,8 @@ receiveItem ::
   ) =>
   RawBearer m ->
   ReadResultT m a
-receiveItem s =
-  runReaderT (decode (Proxy @(DirectCodec m))) s
+receiveItem =
+  runReaderT (decode (Proxy @(DirectCodec m)))
 
 -- * Instances for basic types
 
@@ -350,7 +351,7 @@ instance DSIGNAlgorithm dsign => HasInfo (DirectCodec m) (VerKeyDSIGN dsign) whe
     aliasField ("VerKeyDSIGN " ++ algorithmNameDSIGN (Proxy @dsign)) $
       basicField
         "bytes"
-        (FixedSize . fromIntegral $ verKeySizeDSIGN (Proxy @dsign))
+        (FixedSize . fromIntegral $ fixedSize (Proxy @(VerKeyDSIGN dsign)))
 
 instance
   ( MonadST m
@@ -361,11 +362,11 @@ instance
   Serializable (DirectCodec m) (VerKeyDSIGN dsign)
   where
   encode codec val =
-    encodeSized (verKeySizeDSIGN (Proxy @dsign)) (rawSerialiseVerKeyDSIGN val)
+    encodeSized (fixedSize (Proxy @(VerKeyDSIGN dsign))) (rawEncodeFixedSized val)
 
   decode codec = do
-    raw <- decodeSized (fromIntegral $ verKeySizeDSIGN (Proxy @dsign))
-    let deser = rawDeserialiseVerKeyDSIGN raw
+    raw <- decodeSized (fromIntegral $ fixedSize (Proxy @(VerKeyDSIGN dsign)))
+    let deser = rawDecodeFixedSized raw
     case deser of
       Nothing -> lift . ReadResultT . return $ ReadMalformed "Invalid serialised VerKeyDSIGN"
       Just vk -> return vk
@@ -379,7 +380,7 @@ instance
       ("SignKeyDSIGN<" ++ algorithmNameDSIGN (Proxy @dsign) ++ ">")
       $ basicField
         "bytes"
-        (FixedSize . fromIntegral $ signKeySizeDSIGN (Proxy @dsign))
+        (FixedSize . fromIntegral $ fixedSize (Proxy @(SignKeyDSIGN dsign)))
 
 instance
   ( MonadST m
@@ -390,11 +391,11 @@ instance
   Serializable (DirectCodec m) (SignKeyDSIGN dsign)
   where
   encode codec val =
-    encodeSized (fromIntegral $ signKeySizeDSIGN (Proxy @dsign)) (rawSerialiseSignKeyDSIGN val)
+    encodeSized (fromIntegral $ fixedSize (Proxy @(SignKeyDSIGN dsign))) (rawEncodeFixedSized val)
 
   decode codec = do
-    raw <- decodeSized (fromIntegral $ signKeySizeDSIGN (Proxy @dsign))
-    let deser = rawDeserialiseSignKeyDSIGN raw
+    raw <- decodeSized (fromIntegral $ fixedSize (Proxy @(SignKeyDSIGN dsign)))
+    let deser = rawDecodeFixedSized raw
     case deser of
       Nothing -> lift . ReadResultT . return $ ReadMalformed "Invalid serialised SignKeyDSIGN"
       Just sk -> return sk
@@ -464,11 +465,11 @@ instance
   Serializable (DirectCodec m) (VerKeyKES kes)
   where
   encode codec val =
-    encodeSized (verKeySizeKES (Proxy @kes)) (rawSerialiseVerKeyKES val)
+    encodeSized (fixedSize (Proxy @(VerKeyKES kes))) (rawEncodeFixedSized val)
 
   decode codec = do
-    raw <- decodeSized (fromIntegral $ verKeySizeKES (Proxy @kes))
-    let deser = rawDeserialiseVerKeyKES raw
+    raw <- decodeSized (fromIntegral $ fixedSize (Proxy @(VerKeyKES kes)))
+    let deser = rawDecodeFixedSized raw
     case deser of
       Nothing -> lift . ReadResultT . return $ ReadMalformed "Invalid serialised VerKeyKES"
       Just vk -> return vk
@@ -702,16 +703,18 @@ instance
   HasInfo (DirectCodec m_axB5) (OCert c_ieDN)
   where
   info codec _ =
-    (compoundField "OCert")
+    compoundField
+      "OCert"
       [
         ( "ocertVkHot"
-        , (info codec) (Proxy :: Proxy (VerKeyKES (KES c_ieDN)))
+        , info codec (Proxy :: Proxy (VerKeyKES (KES c_ieDN)))
         )
-      , ("ocertN", (info codec) (Proxy :: Proxy Word64))
-      , ("ocertKESPeriod", (info codec) (Proxy :: Proxy KESPeriod))
+      , ("ocertN", info codec (Proxy :: Proxy Word64))
+      , ("ocertKESPeriod", info codec (Proxy :: Proxy KESPeriod))
       ,
         ( "ocertSigma"
-        , (info codec)
+        , info
+            codec
             ( Proxy ::
                 Proxy (SignedDSIGN (DSIGN c_ieDN) (OCertSignable c_ieDN))
             )
@@ -729,13 +732,13 @@ instance
   where
   encode p item =
     sequence_
-      [ (encode p) (ocertVkHot item)
-      , (encode p) (ocertN item)
-      , (encode p) (ocertKESPeriod item)
-      , (encode p) (ocertSigma item)
+      [ encode p (ocertVkHot item)
+      , encode p (ocertN item)
+      , encode p (ocertKESPeriod item)
+      , encode p (ocertSigma item)
       ]
   decode p =
-    ((((OCert <$> decode p) <*> decode p) <*> decode p) <*> decode p)
+    OCert <$> decode p <*> decode p <*> decode p <*> decode p
 
 -- ** 'TaggedBundle'
 
@@ -839,7 +842,7 @@ instance DSIGNAlgorithm dsign => HasInfo (DirectCodec m) (SigDSIGN dsign) where
       ("SigDSIGN " ++ algorithmNameDSIGN (Proxy @dsign))
       $ basicField
         "bytes"
-        (FixedSize . fromIntegral $ sigSizeDSIGN (Proxy @dsign))
+        (FixedSize . fromIntegral $ fixedSize (Proxy @(SigDSIGN dsign)))
 instance
   ( MonadST m
   , MonadSTM m
@@ -849,11 +852,11 @@ instance
   Serializable (DirectCodec m) (SigDSIGN dsign)
   where
   encode codec val =
-    encodeSized (fromIntegral $ sigSizeDSIGN (Proxy @dsign)) (rawSerialiseSigDSIGN val)
+    encodeSized (fromIntegral $ fixedSize (Proxy @(SigDSIGN dsign))) (rawEncodeFixedSized val)
 
   decode codec = do
-    raw <- decodeSized (fromIntegral $ sigSizeDSIGN (Proxy @dsign))
-    let deser = rawDeserialiseSigDSIGN raw
+    raw <- decodeSized (fromIntegral $ fixedSize (Proxy @(SigDSIGN dsign)))
+    let deser = rawDecodeFixedSized raw
     case deser of
       Nothing -> lift . ReadResultT . return $ ReadMalformed "Invalid serialised SigDSIGN"
       Just sig -> return sig

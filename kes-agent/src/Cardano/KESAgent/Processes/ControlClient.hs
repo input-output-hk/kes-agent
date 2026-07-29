@@ -2,8 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -65,6 +63,7 @@ import Ouroboros.Network.Snocket (Snocket (..))
 
 import Control.Concurrent.Class.MonadMVar (MonadMVar)
 import Control.DeepSeq (NFData)
+import Control.Monad (forM_)
 import Control.Monad.Class.MonadST (MonadST)
 import Control.Monad.Class.MonadSTM (MonadSTM)
 import Control.Monad.Class.MonadThrow (
@@ -188,11 +187,9 @@ runControlClient1 handler proxy mrb options tracer = do
         traceWith tracer ControlClientSocketClosed
     )
     ( \fd -> do
-        case controlClientLocalAddress options of
-          Just addr -> bind s fd addr
-          Nothing -> return ()
+        forM_ (controlClientLocalAddress options) (bind s fd)
         retrySocketWith
-          (if controlClientRetryExponential options then ((min 5000000) . (* 2)) else id)
+          (if controlClientRetryExponential options then min 5000000 . (* 2) else id)
           (controlClientRetryDelay options * 1000)
           (controlClientRetryAttempts options)
           (\(e :: SomeException) n i -> traceWith tracer $ ControlClientAttemptReconnect n)

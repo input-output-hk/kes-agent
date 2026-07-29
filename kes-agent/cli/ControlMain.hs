@@ -285,27 +285,22 @@ pCommonOptions =
       )
 
 pGenKeyOptions =
-  GenKeyOptions
-    <$> pure defCommonOptions
-    <*> pVerKeyFile
+  GenKeyOptions defCommonOptions
+    <$> pVerKeyFile
 
 pQueryKeyOptions =
-  QueryKeyOptions
-    <$> pure defCommonOptions
-    <*> pVerKeyFile
+  QueryKeyOptions defCommonOptions
+    <$> pVerKeyFile
 
 pDropStagedKeyOptions =
-  DropStagedKeyOptions
-    <$> pure defCommonOptions
+  pure (DropStagedKeyOptions defCommonOptions)
 
 pDropKeyOptions =
-  DropKeyOptions
-    <$> pure defCommonOptions
+  pure (DropKeyOptions defCommonOptions)
 
 pInstallKeyOptions =
-  InstallKeyOptions
-    <$> pure defCommonOptions
-    <*> pOpCertFile
+  InstallKeyOptions defCommonOptions
+    <$> pOpCertFile
 
 pVerKeyFile =
   option
@@ -492,7 +487,7 @@ runInstallKey iko' = withIOManager $ \ioManager -> do
         runControlClientCommand
           (ikoCommon iko)
           ioManager
-          (\c -> controlInstallKey c oc)
+          (`controlInstallKey` oc)
       if result == RecvOK
         then
           putStrLn "KES key installed."
