@@ -41,7 +41,7 @@ library
     build-depends: aeson >=2.0
                  , bytestring >=0.11
                  , cardano-crypto-class:cardano-crypto-class ^>=2.5
-                 , cardano-binary
+                 , cardano-binary >=1.9.1
                  , contra-tracer ^>=0.2.1
                  , deepseq
                  , io-classes

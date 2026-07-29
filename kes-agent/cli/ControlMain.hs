@@ -23,6 +23,7 @@ import Cardano.KESAgent.Util.ColoredOutput
 import Cardano.KESAgent.Util.HexBS
 import Cardano.KESAgent.Util.Version
 
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.KES.Class
 import Cardano.Crypto.Libsodium (sodiumInit)
@@ -543,7 +544,7 @@ runGetInfo opt' = withIOManager $ \ioManager -> do
     case taggedBundleInfo tbundleInfo of
       Nothing -> cPutStr red $ printf "{KEY DELETED}"
       Just bundleInfo -> do
-        printf "VerKey: %s\n" (hexShowBS . rawSerialiseVerKeyKES $ bundleInfoVK bundleInfo)
+        printf "VerKey: %s\n" (hexShowBS . rawEncodeFixedSized $ bundleInfoVK bundleInfo)
         printf "Valid from period: %u\n" (unKESPeriod $ bundleInfoStartKESPeriod bundleInfo)
         printf
           "Current evolution: %u / %u\n"
@@ -551,11 +552,11 @@ runGetInfo opt' = withIOManager $ \ioManager -> do
           (totalPeriodsKES (Proxy @(KES StandardCrypto)))
         printf "OpCert number: %u\n" (bundleInfoOCertN bundleInfo)
         let (SignedDSIGN sig) = bundleInfoSigma bundleInfo
-        printf "OpCert signature: %s\n" (hexShowBS . rawSerialiseSigDSIGN $ sig)
+        printf "OpCert signature: %s\n" (hexShowBS . rawEncodeFixedSized $ sig)
 
   whenJust (agentInfoStagedKey info) $ \keyInfo -> do
     cPutStrLn (bold defaultColor) $ printf "--- Staged KES SignKey ---"
-    printf "VerKey: %s\n" (hexShowBS . rawSerialiseVerKeyKES $ keyInfoVK keyInfo)
+    printf "VerKey: %s\n" (hexShowBS . rawEncodeFixedSized $ keyInfoVK keyInfo)
 
   unless (null $ agentInfoBootstrapConnections info) $ do
     cPutStrLn (bold defaultColor) $ printf "--- Bootstrap Peers ---"

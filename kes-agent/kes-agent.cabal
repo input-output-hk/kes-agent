@@ -104,7 +104,7 @@ library
                  , blaze-html >=0.9 && <0.10
                  , bytestring >=0.11
                  , cardano-crypto-class:cardano-crypto-class ^>=2.5
-                 , cardano-binary
+                 , cardano-binary >=1.9.1
                  , contra-tracer ^>=0.2.1
                  , containers >=0.6.5.1 && <0.9
                  , casing >=0.1.4.1 && <0.2
@@ -206,6 +206,7 @@ executable kes-agent-control
                  , kes-agent-crypto
                  , aeson >=2.0
                  , bytestring
+                 , cardano-binary >=1.9.1
                  , cardano-crypto-class:cardano-crypto-class
                  , contra-tracer
                  , extra >=1.7.12 && <1.9
@@ -245,7 +246,7 @@ test-suite kes-agent-tests
                  , aeson >=2.0
                  , async
                  , bytestring
-                 , cardano-binary
+                 , cardano-binary >=1.9.1
                  , cardano-crypto-class:{cardano-crypto-class, testlib}
                  , contra-tracer
                  , containers

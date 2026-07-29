@@ -26,6 +26,11 @@ where
 import Cardano.KESAgent.KES.Crypto
 
 import Cardano.Binary
+import Cardano.Binary.FixedSizeCodec (
+  decodeFixedSized,
+  encodeFixedSized,
+  rawEncodeFixedSized,
+ )
 import Cardano.Crypto.DSIGN.Class as DSIGN
 import Cardano.Crypto.KES.Class
 import Cardano.Crypto.Util (SignableRepresentation (..))
@@ -68,7 +73,7 @@ instance
   where
   getSignableRepresentation (OCertSignable vk counter period) =
     LBS.toStrict . BSB.toLazyByteString $
-      BSB.byteStringCopy (rawSerialiseVerKeyKES vk)
+      BSB.byteStringCopy (rawEncodeFixedSized vk)
         <> BSB.word64BE counter
         <> BSB.word64BE (fromIntegral $ unKESPeriod period)
 
@@ -100,10 +105,10 @@ instance
   ToCBOR (OCert c)
   where
   toCBOR ocert =
-    encodeVerKeyKES (ocertVkHot ocert)
+    encodeFixedSized (ocertVkHot ocert)
       <> toCBOR (ocertN ocert)
       <> toCBOR (ocertKESPeriod ocert)
-      <> encodeSignedDSIGN (ocertSigma ocert)
+      <> encodeFixedSized (ocertSigma ocert)
 
 -- | NB this CBOR format is incompatible with the one defined in
 -- cardano-ledger.
@@ -116,10 +121,10 @@ instance
   where
   fromCBOR =
     OCert
-      <$> decodeVerKeyKES
+      <$> decodeFixedSized
       <*> fromCBOR
       <*> fromCBOR
-      <*> decodeSignedDSIGN
+      <*> decodeFixedSized
 
 -- | Generate an operational certificate for a given hot key.
 makeOCert ::

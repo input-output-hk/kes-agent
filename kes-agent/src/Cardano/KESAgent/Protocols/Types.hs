@@ -19,7 +19,8 @@ import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Util.Pretty
 import Cardano.KESAgent.Util.RefCounting
 
-import Cardano.Crypto.KES.Class (KESAlgorithm, rawSerialiseVerKeyKES)
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
+import Cardano.Crypto.KES.Class (KESAlgorithm)
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
 import Data.Proxy
@@ -75,7 +76,7 @@ mkBundleTrace ::
 mkBundleTrace bundle =
   BundleTrace
     (ocertN (bundleOC bundle))
-    (rawSerialiseVerKeyKES $ ocertVkHot (bundleOC bundle))
+    (rawEncodeFixedSized $ ocertVkHot (bundleOC bundle))
 
 instance Pretty TaggedBundleTrace where
   pretty (TaggedBundleTrace ts keyMay) =

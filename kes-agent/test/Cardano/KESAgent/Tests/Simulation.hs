@@ -38,6 +38,7 @@ import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Util.Pretty
 import Cardano.KESAgent.Util.RefCounting
 
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.DSIGN.Class qualified as DSIGN
 import Cardano.Crypto.DSIGN.Ed25519
@@ -686,7 +687,7 @@ testOneKeyThroughChain
     let expectedSKP = SignKeyWithPeriodKES expectedSK expectedPeriod
 
     expectedVK <- deriveVerKeyKES expectedSK
-    let expectedVKBS = rawSerialiseVerKeyKES expectedVK
+    let expectedVKBS = rawEncodeFixedSized expectedVK
 
     vkHot <- deriveVerKeyKES expectedSK
     let kesPeriod = KESPeriod 0
@@ -696,7 +697,7 @@ testOneKeyThroughChain
 
     let controlScript hooks = do
           generatedVK <- controlClientExec hooks controlGenKey
-          let generatedVKBS = rawSerialiseVerKeyKES <$> generatedVK
+          let generatedVKBS = rawEncodeFixedSized <$> generatedVK
           controlClientReportProperty hooks $
             counterexample "Generated vs. expected VK:" $
               (PrettyBS <$> generatedVKBS) === Just (PrettyBS expectedVKBS)

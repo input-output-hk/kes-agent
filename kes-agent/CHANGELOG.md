@@ -6,6 +6,8 @@
 
 - Update to `contra-tracer ^>=0.2.1`
 - Update to `cardano-crypto-class ^>=2.5`
+- Require `cardano-binary >=1.9.1`, and use the `FixedSizeCodec` API from it in
+  place of the raw serialisation functions deprecated by `cardano-crypto-class`
 
 ## [v1.2.0.0]
 
