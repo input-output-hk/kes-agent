@@ -8,7 +8,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Various bits and pieces for raw serialization.
 module Cardano.KESAgent.Serialization.RawUtil
@@ -447,9 +446,7 @@ receiveRecvResult ::
   RawBearer m ->
   m (ReadResult RecvResult)
 receiveRecvResult s = runReadResultT $ do
-  w <- ReadResultT $ do
-    result <- receiveWord32 s
-    return result
+  w <- ReadResultT $ receiveWord32 s
   return $ decodeRecvResult w
 
 encodeRecvResult :: RecvResult -> Word32

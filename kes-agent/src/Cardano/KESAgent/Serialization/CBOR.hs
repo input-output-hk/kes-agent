@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -17,6 +16,7 @@ import Cardano.KESAgent.KES.OCert
 import Cardano.KESAgent.Serialization.TextEnvelope
 
 import Cardano.Binary (FromCBOR (..), ToCBOR (..))
+import Cardano.Binary.FixedSizeCodec (decodeFixedSized, encodeFixedSized)
 import Cardano.Crypto.DSIGN.Class
 import Cardano.Crypto.KES.Class
 
@@ -96,10 +96,10 @@ instance
 newtype Sigma c = Sigma (SignedDSIGN (DSIGN c) (OCertSignable c))
 
 instance (Typeable c, Crypto c) => ToCBOR (Sigma c) where
-  toCBOR (Sigma x) = encodeSignedDSIGN x
+  toCBOR (Sigma x) = encodeFixedSized x
 
 instance (Typeable c, Crypto c) => FromCBOR (Sigma c) where
-  fromCBOR = Sigma <$> decodeSignedDSIGN
+  fromCBOR = Sigma <$> decodeFixedSized
 
 -- | The operational certificate, as serialized. The serialization format should
 -- be compatible with what @cardano-node@ uses.

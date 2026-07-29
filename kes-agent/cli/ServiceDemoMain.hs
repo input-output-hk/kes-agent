@@ -45,7 +45,7 @@ import System.IO (hFlush, stdout)
 import System.IOManager
 import Text.Printf
 
-data ServiceDemoOptions
+newtype ServiceDemoOptions
   = ServiceDemoOptions
   { sdoServicePath :: Maybe String
   }
@@ -138,7 +138,7 @@ handleKey setState TaggedBundle {taggedBundle = Just (Bundle skpVar ocert)} = do
     setState $ ServiceClientBlockForging certN period (take 8 (hexShowBS skSer) ++ "...")
     return RecvOK
 handleKey setState TaggedBundle {taggedBundle = Nothing} = do
-  setState $ ServiceClientWaitingForCredentials
+  setState ServiceClientWaitingForCredentials
   return RecvOK
 
 hexShowBS :: ByteString -> String

@@ -153,7 +153,7 @@ controlDriver s tracer =
       ReflRelativeAgency (StateAgency st) WeHaveAgency (Relative pr (StateAgency st)) ->
       Message (ControlProtocol m c) st st' ->
       m ()
-    sendMessage = \_ msg -> case (stateToken @st, msg) of
+    sendMessage _ msg = case (stateToken @st, msg) of
       (SInitialState, VersionMessage) -> do
         let VersionIdentifier v = versionIdentifier (Proxy @(ControlProtocol m c))
         sendVersion (Proxy @(ControlProtocol m c)) s (ControlDriverSendingVersionID >$< tracer)
@@ -197,7 +197,7 @@ controlDriver s tracer =
       ReflRelativeAgency (StateAgency st) TheyHaveAgency (Relative pr (StateAgency st)) ->
       () ->
       m (SomeMessage st, ())
-    recvMessage = \_ () -> case stateToken @st of
+    recvMessage _ () = case stateToken @st of
       SInitialState -> do
         traceWith tracer ControlDriverReceivingVersionID
         result <- checkVersion (Proxy @(ControlProtocol m c)) s (ControlDriverReceivedVersionID >$< tracer)

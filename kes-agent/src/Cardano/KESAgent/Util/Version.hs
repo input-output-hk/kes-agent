@@ -11,7 +11,7 @@ import Language.Haskell.TH
 
 libraryVersion :: String
 #if !defined(wasm32_HOST_ARCH)
-libraryVersion = $(litE =<< (stringL <$> runIO getProgramVersion))
+libraryVersion = $(litE . stringL =<< runIO getProgramVersion)
 #else
 libraryVersion = "unknown"
 #endif

@@ -4,14 +4,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | Functions for handling commands issued by a command client within a KES
 -- agent process.
@@ -111,7 +108,7 @@ dropStagedKey ::
 dropStagedKey agent =
   do
     keyMay <- atomically $ takeTMVar (agentStagedKeyVar agent)
-    vkMay <- mapM (flip withCRefValue (deriveVerKeyKES . skWithoutPeriodKES)) keyMay
+    vkMay <- mapM (`withCRefValue` (deriveVerKeyKES . skWithoutPeriodKES)) keyMay
     maybe (return ()) releaseCRef keyMay
     agentTrace agent $ maybe AgentNoStagedKeyToDrop (AgentDroppedStagedKey . formatVK) vkMay
     return Nothing

@@ -3,6 +3,7 @@
 module Cardano.KESAgent.Util.Formatting
 where
 
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
 import Cardano.Crypto.KES.Class (KESAlgorithm (..))
 import Text.Printf
 
@@ -36,4 +37,4 @@ formatVK ::
   KESAlgorithm kes =>
   VerKeyKES kes ->
   String
-formatVK = pretty . rawSerialiseVerKeyKES
+formatVK = pretty . rawEncodeFixedSized

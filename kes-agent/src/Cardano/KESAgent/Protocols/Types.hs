@@ -19,7 +19,8 @@ import Cardano.KESAgent.Protocols.VersionedProtocol
 import Cardano.KESAgent.Util.Pretty
 import Cardano.KESAgent.Util.RefCounting
 
-import Cardano.Crypto.KES.Class (KESAlgorithm, rawSerialiseVerKeyKES)
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
+import Cardano.Crypto.KES.Class (KESAlgorithm)
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
 import Data.Proxy
@@ -75,7 +76,7 @@ mkBundleTrace ::
 mkBundleTrace bundle =
   BundleTrace
     (ocertN (bundleOC bundle))
-    (rawSerialiseVerKeyKES $ ocertVkHot (bundleOC bundle))
+    (rawEncodeFixedSized $ ocertVkHot (bundleOC bundle))
 
 instance Pretty TaggedBundleTrace where
   pretty (TaggedBundleTrace ts keyMay) =
@@ -193,8 +194,8 @@ instance Pretty ServiceDriverTrace where
   pretty (ServiceDriverSendingKey k) = "sending key " ++ pretty k
   pretty (ServiceDriverSentKey k) = "sent key " ++ pretty k
   pretty (ServiceDriverReceivedKey k) = "received key " ++ pretty k
-  pretty (ServiceDriverConfirmingKey) = "confirming key"
-  pretty (ServiceDriverConfirmedKey) = "confirmed key"
+  pretty ServiceDriverConfirmingKey = "confirming key"
+  pretty ServiceDriverConfirmedKey = "confirmed key"
   pretty (ServiceDriverDecliningKey r) = "declining key " ++ pretty r
   pretty (ServiceDriverDeclinedKey r) = "declined key " ++ pretty r
   pretty (ServiceDriverRequestingKeyDrop ts) = "requesting key drop " ++ pretty ts

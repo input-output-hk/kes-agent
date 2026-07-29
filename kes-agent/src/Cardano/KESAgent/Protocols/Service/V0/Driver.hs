@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -11,8 +10,6 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -78,7 +75,7 @@ serviceDriver s tracer =
       ReflRelativeAgency (StateAgency st) WeHaveAgency (Relative pr (StateAgency st)) ->
       Message (ServiceProtocol m c) st st' ->
       m ()
-    sendMessage = \_ msg -> case (stateToken @st, msg) of
+    sendMessage _ msg = case (stateToken @st, msg) of
       (SInitialState, VersionMessage) -> do
         let VersionIdentifier v = versionIdentifier (Proxy @(ServiceProtocol m c))
         sendVersion (Proxy @(ServiceProtocol m c)) s (ServiceDriverSendingVersionID >$< tracer)
@@ -114,7 +111,7 @@ serviceDriver s tracer =
       ReflRelativeAgency (StateAgency st) TheyHaveAgency (Relative pr (StateAgency st)) ->
       () ->
       m (SomeMessage st, ())
-    recvMessage = \agency () -> case stateToken @st of
+    recvMessage _ () = case stateToken @st of
       SInitialState -> do
         traceWith tracer ServiceDriverReceivingVersionID
         result <- checkVersion (Proxy @(ServiceProtocol m c)) s (ServiceDriverReceivedVersionID >$< tracer)

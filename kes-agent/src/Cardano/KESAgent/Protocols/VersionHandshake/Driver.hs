@@ -80,7 +80,7 @@ versionHandshakeDriver s tracer =
       ReflRelativeAgency (StateAgency st) WeHaveAgency (Relative pr (StateAgency st)) ->
       Message VersionHandshakeProtocol st st' ->
       m ()
-    sendMessage = \_ msg -> case (stateToken @st, msg) of
+    sendMessage _ msg = case (stateToken @st, msg) of
       (SInitialState, VersionOfferMessage versions) -> do
         traceWith tracer $ VersionHandshakeDriverOfferingVersions versions
         sendItem s versions
@@ -90,7 +90,7 @@ versionHandshakeDriver s tracer =
         sendItem s (Just version)
         return ()
       (SVersionsOfferedState, VersionRejectedMessage) -> do
-        traceWith tracer $ VersionHandshakeDriverRejectingVersion
+        traceWith tracer VersionHandshakeDriverRejectingVersion
         sendItem s (Nothing :: Maybe VersionIdentifier)
         return ()
       (SEndState, _) -> error "This cannot happen"
@@ -103,7 +103,7 @@ versionHandshakeDriver s tracer =
       ReflRelativeAgency (StateAgency st) TheyHaveAgency (Relative pr (StateAgency st)) ->
       () ->
       m (SomeMessage st, ())
-    recvMessage = \_ () -> case stateToken @st of
+    recvMessage _ () = case stateToken @st of
       SInitialState -> do
         result <- runReadResultT $ receiveItem s
         case result of
