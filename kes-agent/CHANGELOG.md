@@ -4,10 +4,15 @@
 
 ### Breaking
 
-- Update to `contra-tracer ^>=0.2.1`
 - Update to `cardano-crypto-class ^>=2.5`
 - Require `cardano-binary >=1.9.1`, and use the `FixedSizeCodec` API from it in
   place of the raw serialisation functions deprecated by `cardano-crypto-class`
+
+### Non-Breaking
+
+- Widen `contra-tracer` bound to `>=0.1 && <0.3`, using CPP to support both the
+  `0.1.x` and `0.2.x` API (the latter requires `mkTracer` in place of the
+  `Tracer` constructor to build a tracer from a callback)
 
 ## [v1.2.0.0]
 

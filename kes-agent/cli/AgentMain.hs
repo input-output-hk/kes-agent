@@ -741,6 +741,14 @@ runNormally configPathMay nmo' = withIOManager $ \ioManager -> do
 
 programDesc = fullDesc
 
+#if !MIN_VERSION_contra_tracer(0,2,0)
+-- | 'mkTracer' was only introduced in @contra-tracer-0.2.0.0@; on earlier
+-- versions, the 'Tracer' constructor plays the same role.
+{-# INLINE mkTracer #-}
+mkTracer :: Applicative m => (a -> m ()) -> Tracer m a
+mkTracer = Tracer
+#endif
+
 main = do
   sodiumInit
   let parserPrefs = prefs $ subparserInline <> helpShowGlobals

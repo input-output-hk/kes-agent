@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -123,7 +124,11 @@ import Control.Monad.Class.MonadThrow (
   finally,
  )
 import Control.Monad.Class.MonadTimer (threadDelay)
+#if MIN_VERSION_contra_tracer(0,2,0)
 import Control.Tracer (Tracer, mkTracer, traceWith)
+#else
+import Control.Tracer (Tracer (Tracer), traceWith)
+#endif
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy (..))
@@ -408,3 +413,11 @@ runAgent agent = do
 labelMyThread label = do
   tid <- myThreadId
   labelThread tid label
+
+#if !MIN_VERSION_contra_tracer(0,2,0)
+-- | 'mkTracer' was only introduced in @contra-tracer-0.2.0.0@; on earlier
+-- versions, the 'Tracer' constructor plays the same role.
+{-# INLINE mkTracer #-}
+mkTracer :: Applicative m => (a -> m ()) -> Tracer m a
+mkTracer = Tracer
+#endif

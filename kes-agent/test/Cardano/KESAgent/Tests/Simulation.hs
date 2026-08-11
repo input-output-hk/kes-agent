@@ -87,7 +87,11 @@ import Control.Monad.Class.MonadThrow (
 import Control.Monad.Class.MonadTime
 import Control.Monad.Class.MonadTimer (MonadTimer, threadDelay)
 import Control.Monad.IOSim
+#if MIN_VERSION_contra_tracer(0,2,0)
 import Control.Tracer (Tracer, mkTracer, nullTracer, traceWith)
+#else
+import Control.Tracer (Tracer (Tracer), nullTracer, traceWith)
+#endif
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -886,3 +890,11 @@ mlockedSeedFromPSB = fmap MLockedSeed . mlsbFromPSB
 
 mlsbFromPSB :: (MonadST m, KnownNat n) => PinnedSizedBytes n -> m (MLockedSizedBytes n)
 mlsbFromPSB = mlsbFromByteString . psbToByteString
+
+#if !MIN_VERSION_contra_tracer(0,2,0)
+-- | 'mkTracer' was only introduced in @contra-tracer-0.2.0.0@; on earlier
+-- versions, the 'Tracer' constructor plays the same role.
+{-# INLINE mkTracer #-}
+mkTracer :: Applicative m => (a -> m ()) -> Tracer m a
+mkTracer = Tracer
+#endif

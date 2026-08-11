@@ -42,7 +42,7 @@ library
                  , bytestring >=0.11
                  , cardano-crypto-class:cardano-crypto-class ^>=2.5
                  , cardano-binary >=1.9.1
-                 , contra-tracer ^>=0.2.1
+                 , contra-tracer >=0.1 && <0.3
                  , deepseq
                  , io-classes
                  , nothunks
