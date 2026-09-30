@@ -1,7 +1,7 @@
 FROM haskell:9.10-bookworm
 
 # Copy over kes-agent source files
-ADD ./kes-agent.cabal ./CHANGELOG.md /opt/kes-agent/
+ADD ./kes-agent.cabal ./CHANGELOG.md ./LICENSE ./NOTICE /opt/kes-agent/
 ADD ./src /opt/kes-agent/src/
 ADD ./cli /opt/kes-agent/cli/
 ADD ./test /opt/kes-agent/test/
@@ -43,4 +43,4 @@ RUN cabal update
 RUN cabal build exe:kes-agent
 RUN cabal install exe:kes-agent exe:kes-agent-control --installdir=/usr/local/bin/ --install-method=copy --overwrite-policy=always
 
-CMD /usr/local/bin/kes-agent -F /etc/kes-agent/agent.toml run
+CMD ["/usr/local/bin/kes-agent", "-F", "/etc/kes-agent/agent.toml", "run"]

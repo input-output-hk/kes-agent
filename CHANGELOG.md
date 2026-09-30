@@ -7,6 +7,9 @@
 - Update to `cardano-crypto-class ^>=2.6`.
 - Absorb `kes-agent-crypto` package into `kes-agent:crypto` sublibrary. If you
   need its old changelog, check the git history.
+- Drop support for GHC older than 9.6 (`base >=4.18`).
+- Add upper bounds to all dependencies, and raise some lower bounds to the
+  versions we test with (for example `aeson ^>=2.2.5`, `io-sim ^>=1.8`).
 
 ## [v1.3.0.0]
 
