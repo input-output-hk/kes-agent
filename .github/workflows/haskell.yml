@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Trailing whitespace check
       if: matrix.os != 'windows-latest'
@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install fourmolu
       run: |
@@ -85,7 +85,7 @@ jobs:
       with:
         use-sodium-vrf: false # default is true
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Cabal update
       run: cabal update
@@ -109,7 +109,7 @@ jobs:
     - name: Set cache version
       run: echo "CACHE_VERSION=9w76Z3Q" >> $GITHUB_ENV
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       name: Cache cabal store
       with:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
