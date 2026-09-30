@@ -19,8 +19,19 @@ function check-whitespace-file {
     fi
 }
 
-# fd . ./kes-agent -e hs
-for FILE in $(fd . ./kes-agent -e hs); do
+# First, try to find the 'fd' command
+fdcmd="fd"
+if ! command -v "$fdcmd" &> /dev/null; then
+    # In Ubuntu systems the fd command is called fdfind.
+    # If 'fd' is not found, try 'fdfind'
+    fdcmd="fdfind"
+    if ! command -v "$fdcmd" &> /dev/null; then
+        echo "Error: Neither 'fd' nor 'fdfind' command found." >&2
+        exit 1
+    fi
+fi
+
+for FILE in $($fdcmd . ./src ./cli ./test -e hs); do
     # echo "Checking: $FILE"
     check-whitespace-file "$FILE"
 done

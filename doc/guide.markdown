@@ -380,7 +380,7 @@ To run KES Agent as a daemon using systemd, the following steps are necessary:
 8. Start the kes-agent service (`systemctl start kes-agent`).
 
 An example installation script that performs the above steps is provided in
-`etc/systemd/install.sh`.
+`systemd/install.sh`.
 
 #### Installing KES Agent Control
 
@@ -1248,17 +1248,17 @@ functionality for the agent itself, the control client, and any service
 clients.
 
 To implement KES agent connectivity in your own software, look at the modules
-in kes-agent/src/Cardano/KESAgent/Processes/:
+in src/kes-agent/Cardano/KESAgent/Processes/:
 
-- kes-agent/src/Cardano/KESAgent/Processes/Agent.hs provides agent
+- src/kes-agent/Cardano/KESAgent/Processes/Agent.hs provides agent
   functionality. You will not need this unless you want to make your own KES
   client.
-- kes-agent/src/Cardano/KESAgent/Processes/ControlClient.hs provides control
+- src/kes-agent/Cardano/KESAgent/Processes/ControlClient.hs provides control
   client functionality (query the state of an agent process, requesting a new
   KES key to be generated, outputting the staged KES verification key,
   uploading OpCerts to activate the staged key, dropping the current key). You
   will need this if you want to make a custom frontend for controlling KES
   agents.
-- kes-agent/src/Cardano/KESAgent/Processes/ServiceClient.hs provides service
+- src/kes-agent/Cardano/KESAgent/Processes/ServiceClient.hs provides service
   client functionality (receiving KES sign keys). You will need this if you
   want your application to connect to a KES agent.

@@ -10,12 +10,11 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2026-06-29T22:49:53Z
-  , cardano-haskell-packages 2026-07-29T12:43:38Z
+  , hackage.haskell.org 2026-09-30T08:47:51Z
+  , cardano-haskell-packages 2026-09-29T22:14:46Z
 
 packages:
-  kes-agent
-  kes-agent-crypto
+  .
 
 package kes-agent
   ghc-options: -Wincomplete-patterns
@@ -43,36 +42,12 @@ package cardano-crypto-class
 -- cabal-allow-newer
 if impl (ghc >= 9.14)
   allow-newer:
-    -- https://github.com/haskell/aeson/issues/1155
-    , aeson:QuickCheck
-    , aeson:containers
-    , aeson:template-haskell
-
-    -- https://github.com/phadej/boring/issues/48
-    , boring:base
-
-    -- https://github.com/well-typed/canonical-json/issues
-    , canonical-json:containers
-
     -- https://github.com/well-typed/cborg/issues/373
     , cborg:base
     , cborg:containers
 
     -- https://github.com/well-typed/cborg/issues/373
     , cborg-json:base
-
-    -- https://github.com/haskellari/indexed-traversable/issues/49
-    , indexed-traversable:base
-    , indexed-traversable:containers
-    , indexed-traversable-instances:base
-
-    -- https://github.com/haskellari/qc-instances/issues/110
-    , quickcheck-instances:base
-    , quickcheck-monoids:base
-
-    -- https://github.com/haskellari/these/issues/211
-    , semialign:base
-    , semialign:containers
 
     -- No source repository listed on Hackage. Have emailed the maintainer.
     , serdoc-core:template-haskell
@@ -81,17 +56,3 @@ if impl (ghc >= 9.14)
     , serialise:base
     , serialise:containers
     , serialise:time
-
-    -- https://github.com/phadej/tdigest/issues/50
-    , tdigest:base
-
-    -- https://github.com/haskellari/these/issues/211
-    , these:base
-
-    -- https://github.com/haskellari/tree-diff/issues/102
-    , tree-diff:QuickCheck
-    , tree-diff:base
-    , tree-diff:containers
-
-    -- https://github.com/haskell-hvr/uuid/issues/95
-    , uuid-types:template-haskell

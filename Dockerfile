@@ -1,17 +1,19 @@
-FROM haskell:9.10
+FROM haskell:9.10-bookworm
 
 # Copy over kes-agent source files
-ADD ./kes-agent /opt/kes-agent/kes-agent/
+ADD ./kes-agent.cabal ./CHANGELOG.md ./LICENSE ./NOTICE /opt/kes-agent/
+ADD ./src /opt/kes-agent/src/
+ADD ./cli /opt/kes-agent/cli/
+ADD ./test /opt/kes-agent/test/
+ADD ./fixtures /opt/kes-agent/fixtures/
 ADD ./cabal.project /opt/kes-agent/
-ADD ./docker/cabal.project.local /opt/kes-agent/
 
 # Copy kes-agent bootstrapping data
-ADD ./kes-agent/fixtures/mainnet-shelley-genesis.json /etc/kes-agent/mainnet-shelley-genesis.json
+ADD ./fixtures/mainnet-shelley-genesis.json /etc/kes-agent/mainnet-shelley-genesis.json
 ADD ./docker/agent.toml /etc/kes-agent/agent.toml
 
 # Install system dependencies
-RUN apt-get update
-RUN apt-get install -y libsodium-dev autotools-dev autoconf build-essential libtool pkgconf
+RUN apt-get update && apt-get install -y libsodium-dev autotools-dev autoconf build-essential libtool pkgconf
 
 # secp256k1
 WORKDIR /opt
@@ -41,4 +43,4 @@ RUN cabal update
 RUN cabal build exe:kes-agent
 RUN cabal install exe:kes-agent exe:kes-agent-control --installdir=/usr/local/bin/ --install-method=copy --overwrite-policy=always
 
-CMD /usr/local/bin/kes-agent -F /etc/kes-agent/agent.toml run
+CMD ["/usr/local/bin/kes-agent", "-F", "/etc/kes-agent/agent.toml", "run"]
