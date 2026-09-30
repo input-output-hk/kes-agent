@@ -1,5 +1,13 @@
 # Changelog - Kes Agent
 
+## [v1.4.0.0]
+
+### Breaking
+
+- Update to `cardano-crypto-class ^>=2.6`.
+- Absorb `kes-agent-crypto` package into `kes-agent:crypto` sublibrary. If you
+  need its old changelog, check the git history.
+
 ## [v1.3.0.0]
 
 ### Breaking
